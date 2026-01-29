@@ -6,11 +6,14 @@ FROM node:20-alpine AS frontend-builder
 
 WORKDIR /frontend
 
+# Set memory limits for Node
+ENV NODE_OPTIONS="--max-old-space-size=512"
+
 # Copy package files
 COPY frontend/package*.json ./
 
-# Install dependencies
-RUN npm ci
+# Install dependencies with reduced memory usage
+RUN npm ci --prefer-offline --no-audit --no-fund
 
 # Copy source code
 COPY frontend/ ./
