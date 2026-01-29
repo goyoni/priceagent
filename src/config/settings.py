@@ -11,7 +11,10 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
     # OpenAI
-    openai_api_key: str = Field(..., description="OpenAI API key")
+    openai_api_key: Optional[str] = Field(
+        default=None,
+        description="OpenAI API key (required for agent functionality)",
+    )
 
     # SerpAPI for Google Search/Shopping
     serpapi_key: Optional[str] = Field(
