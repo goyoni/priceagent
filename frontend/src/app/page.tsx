@@ -39,38 +39,54 @@ export default function SearchPage() {
 
   // Poll for trace results
   const pollForResults = async (traceId: string, apiUrl: string): Promise<string> => {
-    const maxAttempts = 120; // 2 minutes max
+    const maxAttempts = 300; // 5 minutes max
     const pollInterval = 1000; // 1 second
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const response = await fetch(`${apiUrl}/traces/${traceId}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch results');
-      }
-
-      const trace = await response.json();
-
-      // Update status message based on current activity
-      if (trace.spans && trace.spans.length > 0) {
-        const lastSpan = trace.spans[trace.spans.length - 1];
-        if (lastSpan.status === 'running') {
-          setStatusMessage(lastSpan.name || 'Processing...');
+      try {
+        const response = await fetch(`${apiUrl}/traces/${traceId}`);
+        if (!response.ok) {
+          // Trace might not exist yet, keep polling
+          if (response.status === 404 && attempt < 10) {
+            await new Promise(resolve => setTimeout(resolve, pollInterval));
+            continue;
+          }
+          throw new Error('Failed to fetch results');
         }
-      }
 
-      if (trace.status === 'completed') {
-        return trace.final_output || '';
-      }
+        const trace = await response.json();
 
-      if (trace.status === 'error') {
-        throw new Error(trace.error || 'Search failed');
-      }
+        // Update status message based on current activity
+        if (trace.spans && trace.spans.length > 0) {
+          const runningSpan = trace.spans.find((s: { status: string }) => s.status === 'running');
+          if (runningSpan) {
+            setStatusMessage(runningSpan.name || 'Processing...');
+          } else {
+            setStatusMessage(`Processing... (${trace.spans.length} steps completed)`);
+          }
+        }
 
-      // Wait before next poll
-      await new Promise(resolve => setTimeout(resolve, pollInterval));
+        if (trace.status === 'completed') {
+          return trace.final_output || '';
+        }
+
+        if (trace.status === 'error') {
+          throw new Error(trace.error || 'Search failed');
+        }
+
+        // Wait before next poll
+        await new Promise(resolve => setTimeout(resolve, pollInterval));
+      } catch (err) {
+        // Network error - retry a few times
+        if (attempt < maxAttempts - 1) {
+          await new Promise(resolve => setTimeout(resolve, pollInterval));
+          continue;
+        }
+        throw err;
+      }
     }
 
-    throw new Error('Search timed out. Please try again.');
+    throw new Error('Search timed out. Check the dashboard for results.');
   };
 
   const handleSearch = useCallback(async (e: React.FormEvent) => {
