@@ -158,7 +158,7 @@ function SpanItem({ span, index }: SpanItemProps) {
             </div>
           )}
 
-          {span.input_messages && (
+          {span.input_messages != null && (
             <div>
               <div className="text-xs text-secondary uppercase mb-1">
                 Input Messages
@@ -180,7 +180,7 @@ function SpanItem({ span, index }: SpanItemProps) {
             </div>
           )}
 
-          {span.tool_input && (
+          {span.tool_input != null && (
             <div>
               <div className="text-xs text-secondary uppercase mb-1">
                 Tool Input
