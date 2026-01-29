@@ -20,6 +20,7 @@ build/
 node_modules/
 frontend/.next/
 .npm
+# Note: frontend/out is NOT ignored - it contains pre-built static files for deployment
 
 # Data
 data/

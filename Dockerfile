@@ -1,27 +1,6 @@
-# Multi-stage Dockerfile for PriceAgent
-# Builds both frontend and backend, serves together
+# Single-stage Dockerfile for PriceAgent
+# Expects frontend/out to be pre-built and committed
 
-# Stage 1: Build frontend
-FROM node:20-alpine AS frontend-builder
-
-WORKDIR /frontend
-
-# Set memory limits for Node
-ENV NODE_OPTIONS="--max-old-space-size=512"
-
-# Copy package files
-COPY frontend/package*.json ./
-
-# Install dependencies with reduced memory usage
-RUN npm ci --prefer-offline --no-audit --no-fund
-
-# Copy source code
-COPY frontend/ ./
-
-# Build static export
-RUN npm run build
-
-# Stage 2: Python backend with frontend static files
 FROM python:3.12-slim
 
 WORKDIR /app
@@ -41,8 +20,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY src/ ./src/
 COPY data/ ./data/ 2>/dev/null || mkdir -p ./data
 
-# Copy frontend build from builder stage
-COPY --from=frontend-builder /frontend/out ./frontend/out
+# Copy pre-built frontend static files
+COPY frontend/out ./frontend/out
 
 # Create data directory
 RUN mkdir -p /app/data
