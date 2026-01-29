@@ -246,7 +246,7 @@ export function TraceDetail() {
           {runningSpans.length > 0 && (
             <div className="text-sm text-secondary">
               <p>Current: {runningSpans[0]?.name || 'Processing'}</p>
-              {runningSpans[0]?.tool_input && typeof runningSpans[0].tool_input === 'object' && (
+              {runningSpans[0]?.tool_input != null && typeof runningSpans[0].tool_input === 'object' && (
                 <p className="text-xs mt-1">
                   {JSON.stringify(runningSpans[0].tool_input).slice(0, 100)}...
                 </p>
