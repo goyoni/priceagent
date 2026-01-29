@@ -1,0 +1,57 @@
+country_code: IL
+language: he
+currency: ILS
+phone_prefix: "+972"
+
+price_comparison_sites:
+  - name: zap_http
+    base_url: https://www.zap.co.il
+    search_path: /search.aspx?keyword={query}
+    scraper_class: ZapHttpScraper
+    priority: 0  # HTTP-based, reliable
+  - name: wisebuy
+    base_url: https://www.wisebuy.co.il
+    search_path: /search?q={query}
+    scraper_class: WiseBuyScraper
+    priority: 1  # Secondary aggregator
+  - name: google_shopping
+    base_url: https://shopping.google.com
+    search_path: /search?q={query}
+    scraper_class: GoogleShoppingScraper
+    priority: 5  # Use SerpAPI when available
+  - name: google_search
+    base_url: https://www.google.co.il
+    search_path: /search?q={query}
+    scraper_class: GoogleSearchScraper
+    priority: 10  # Fallback to organic search
+  # Playwright-based scraper disabled - fails in sandboxed environments
+  # - name: zap
+  #   base_url: https://www.zap.co.il
+  #   search_path: /search.aspx?keyword={query}
+  #   scraper_class: ZapScraper
+  #   priority: 1
+
+# Aggregator-specific scrapers for deep price discovery
+# These sources often have better appliance listings than general Google search
+aggregator_sites:
+  - name: zap_http
+    description: Israel's primary price comparison site
+    categories: [appliances, electronics, home]
+  - name: wisebuy
+    description: Israeli price comparison with good store coverage
+    categories: [appliances, electronics, home]
+
+negotiation:
+  greeting_template: |
+    שלום, אני מתעניין ב{product_name}.
+    האם יש אפשרות להנחה על המחיר?
+  counter_offer_template: |
+    מצאתי מחיר של {competitor_price} ₪ במקום אחר.
+    האם תוכלו להתאים את המחיר?
+  acceptance_template: |
+    מעולה, אני מקבל את ההצעה של {offered_price} ₪.
+    איך אפשר להמשיך לרכישה?
+  cultural_notes:
+    - Direct negotiation is common and expected
+    - Ask about "מחיר עסקה" (deal price)
+    - Mentioning competitor prices is acceptable

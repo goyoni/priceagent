@@ -1,0 +1,55 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+.env
+.venv
+env/
+venv/
+ENV/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# Node
+node_modules/
+frontend/node_modules/
+frontend/.next/
+.npm
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Testing
+.coverage
+htmlcov/
+tests/
+
+# Data (will be mounted or created at runtime)
+data/*.db
+data/*.log
+*.log
+
+# Documentation
+*.md
+docs/
+
+# Local development
+docker-compose*.yml
+.dockerignore
+Makefile
+
+# Claude
+.claude/
