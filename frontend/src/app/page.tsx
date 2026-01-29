@@ -30,10 +30,48 @@ export default function SearchPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchTime, setSearchTime] = useState<number | null>(null);
 
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+
   // Track page view
   useEffect(() => {
     trackPageView('/');
   }, []);
+
+  // Poll for trace results
+  const pollForResults = async (traceId: string, apiUrl: string): Promise<string> => {
+    const maxAttempts = 120; // 2 minutes max
+    const pollInterval = 1000; // 1 second
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const response = await fetch(`${apiUrl}/traces/${traceId}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch results');
+      }
+
+      const trace = await response.json();
+
+      // Update status message based on current activity
+      if (trace.spans && trace.spans.length > 0) {
+        const lastSpan = trace.spans[trace.spans.length - 1];
+        if (lastSpan.status === 'running') {
+          setStatusMessage(lastSpan.name || 'Processing...');
+        }
+      }
+
+      if (trace.status === 'completed') {
+        return trace.final_output || '';
+      }
+
+      if (trace.status === 'error') {
+        throw new Error(trace.error || 'Search failed');
+      }
+
+      // Wait before next poll
+      await new Promise(resolve => setTimeout(resolve, pollInterval));
+    }
+
+    throw new Error('Search timed out. Please try again.');
+  };
 
   const handleSearch = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,29 +80,36 @@ export default function SearchPage() {
     setIsSearching(true);
     setError(null);
     setResults([]);
+    setStatusMessage('Starting search...');
     const startTime = Date.now();
 
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
-      const response = await fetch(`${apiUrl}/api/agent/run`, {
+
+      // Start the search
+      const response = await fetch(`${apiUrl}/agent/run`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           agent: 'research',
-          prompt: `Search for: ${query}`,
+          query: query,
         }),
       });
 
       if (!response.ok) {
-        throw new Error('Search failed. Please try again.');
+        throw new Error('Failed to start search. Please try again.');
       }
 
-      const data = await response.json();
+      const { trace_id } = await response.json();
+
+      // Poll for results
+      const resultText = await pollForResults(trace_id, apiUrl);
       const duration = Date.now() - startTime;
       setSearchTime(duration);
+      setStatusMessage(null);
 
       // Parse results from agent output
-      const parsed = parseSearchResults(data.result);
+      const parsed = parseSearchResults(resultText);
       setResults(parsed);
 
       // Track search
@@ -75,6 +120,7 @@ export default function SearchPage() {
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
+      setStatusMessage(null);
     } finally {
       setIsSearching(false);
     }
@@ -139,6 +185,13 @@ export default function SearchPage() {
                 )}
               </button>
             </div>
+
+            {/* Status message during search */}
+            {isSearching && statusMessage && (
+              <div className="text-center mt-4 text-slate-400 text-sm animate-pulse">
+                {statusMessage}
+              </div>
+            )}
           </form>
 
           {/* Quick suggestions */}
