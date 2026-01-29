@@ -4,6 +4,7 @@
 
 import { useEffect, useRef, useCallback } from 'react';
 import { useTraceStore } from '@/stores/useTraceStore';
+import type { OperationalSummary } from '@/lib/types';
 
 /**
  * Get the WebSocket URL based on environment or current location.
@@ -61,7 +62,7 @@ export function useWebSocket() {
             total_tokens: 0,
             total_duration_ms: 0,
             spans: [],
-            operational_summary: data.operational_summary as typeof data.operational_summary,
+            operational_summary: data.operational_summary as OperationalSummary | undefined,
           });
           break;
 
@@ -73,7 +74,7 @@ export function useWebSocket() {
             ended_at: (data.ended_at as string) || new Date().toISOString(),
             total_duration_ms: data.total_duration_ms as number,
             total_tokens: data.total_tokens as number,
-            operational_summary: data.operational_summary as typeof data.operational_summary,
+            operational_summary: data.operational_summary as OperationalSummary | undefined,
           });
           break;
 
