@@ -25,7 +25,6 @@ from src.bridge.whatsapp_client import create_whatsapp_client
 from src.config.settings import settings
 from src.observability import ObservabilityHooks, TraceStore, set_trace_store
 from src.api.routes.traces import router as traces_router
-from src.api.routes.dashboard import router as dashboard_router
 from src.api.routes.agent import router as agent_router
 from src.api.routes.sellers import router as sellers_router
 from src.api.routes.analytics import router as analytics_router
@@ -54,7 +53,6 @@ app.add_middleware(
 )
 
 app.include_router(traces_router)
-app.include_router(dashboard_router)
 app.include_router(agent_router)
 app.include_router(sellers_router)
 app.include_router(analytics_router)

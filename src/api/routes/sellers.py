@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from src.db.session import get_db_session
 from src.db.repository.sellers import SellerRepository
 
-router = APIRouter(prefix="/sellers", tags=["sellers"])
+router = APIRouter(prefix="/api/sellers", tags=["sellers"])
 
 
 class ContactLookupRequest(BaseModel):

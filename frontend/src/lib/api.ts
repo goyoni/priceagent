@@ -96,7 +96,7 @@ class ApiClient {
   ): Promise<Record<string, { domain: string; seller_name?: string; phone_number?: string; whatsapp_number?: string }>> {
     const data = await this.fetch<{
       contacts: Record<string, { domain: string; seller_name?: string; phone_number?: string; whatsapp_number?: string }>;
-    }>('/sellers/contacts', {
+    }>('/api/sellers/contacts', {
       method: 'POST',
       body: JSON.stringify({ domains }),
     });
@@ -123,7 +123,7 @@ class ApiClient {
       whatsapp_number?: string;
       website_url?: string;
       rating?: number;
-    }> }>('/sellers/');
+    }> }>('/api/sellers/');
     return data.sellers;
   }
 }
