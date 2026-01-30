@@ -31,8 +31,9 @@ SELLER_ALIASES = {
     "פירסט פרייס": "firstprice",
     "firstprice": "firstprice",
     # Domain-based normalization
-    "zap.co.il": "zap",
     "x-press.co.il": "xpress",
+    "x-press": "xpress",
+    "אקספרס": "xpress",
     # Common variations
     "citydeal | סיטי דיל": "citydeal",
     "א.ל.מ": "alm",
@@ -40,6 +41,21 @@ SELLER_ALIASES = {
     "ivory": "ivory",
     "mahsanei hashmal": "mahsanei-hashmal",
     "מחסני חשמל": "mahsanei-hashmal",
+    "superelectric": "superelectric",
+    "סופר אלקטריק": "superelectric",
+    "שוק החשמל": "shuk-hashmal",
+    "shukhashmal": "shuk-hashmal",
+}
+
+# Zap-owned store names - these should aggregate under "zap"
+ZAP_STORE_NAMES = {
+    "zap",
+    "zapstore",
+    "zap store",
+    "zap.co.il",
+    "רכישה בזאפ",
+    "zap direct",
+    "זאפ",
 }
 
 # Reverse mapping from canonical name to domain (for site-search)
@@ -86,11 +102,17 @@ def normalize_seller_name(name: str, url: Optional[str] = None) -> str:
     Note:
         For comparison sites like Zap, we use the ACTUAL seller name (not "zap")
         so that products from different sellers don't incorrectly aggregate.
-        Only use "zap" if the seller is actually Zap itself.
+        Only use "zap" if the seller is actually Zap's own store (ZapStore, רכישה בזאפ, etc.).
     """
     name_lower = name.lower().strip()
 
-    # Check known aliases first - require word boundary matching, not substring
+    # First, check if this is a Zap-owned store - these should aggregate under "zap"
+    # This handles: "ZapStore", "Zap.co.il", "רכישה בזאפ", etc.
+    for zap_name in ZAP_STORE_NAMES:
+        if zap_name in name_lower or name_lower in zap_name:
+            return "zap"
+
+    # Check known aliases - require word boundary matching, not substring
     # This prevents "BUG Electric" matching the "bug" alias incorrectly
     for alias, canonical in SELLER_ALIASES.items():
         alias_lower = alias.lower()
@@ -105,12 +127,13 @@ def normalize_seller_name(name: str, url: Optional[str] = None) -> str:
 
     # If name is generic/unknown, try domain-based matching
     # But skip if URL is from a comparison/aggregator site (zap, wisebuy, etc.)
+    # because the seller is a third-party, not the aggregator itself
     if url:
         domain = extract_domain_name(url)
         if domain:
-            # Skip domain matching for aggregator sites - use name instead
-            aggregator_domains = {"zap", "wisebuy", "pricewatch"}
-            if domain not in aggregator_domains:
+            # Skip domain matching for aggregator sites - use the actual seller name
+            aggregator_domains = {"zap", "wisebuy", "pricewatch", "shop"}
+            if domain not in aggregator_domains and not domain.startswith("shop."):
                 # Check if domain matches any known alias
                 for alias, canonical in SELLER_ALIASES.items():
                     if alias.lower() in domain:
