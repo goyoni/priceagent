@@ -1,6 +1,10 @@
-"""Google search scrapers using SerpAPI."""
+"""Google search scrapers.
 
-from .google_shopping_scraper import GoogleShoppingScraper
-from .google_search_scraper import GoogleSearchScraper
+Uses direct HTTP scraping (free, no API key needed).
+"""
+
+# Use direct scrapers (no API key needed)
+from .google_shopping_direct import GoogleShoppingDirectScraper as GoogleShoppingScraper
+from .google_search_direct import GoogleSearchDirectScraper as GoogleSearchScraper
 
 __all__ = ["GoogleShoppingScraper", "GoogleSearchScraper"]

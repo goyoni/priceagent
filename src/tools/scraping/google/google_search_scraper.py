@@ -27,8 +27,11 @@ MAX_RETRIES = 5
 INITIAL_RETRY_DELAY = 1.0  # seconds (will backoff: 1, 2, 4, 8, 16)
 
 
-@ScraperRegistry.register("IL", "google_search")
-class GoogleSearchScraper(BaseScraper):
+# NOTE: This SerpAPI-based scraper is deprecated.
+# Use google_search_direct.py instead (no API key needed).
+# Keeping this file for reference only.
+
+class GoogleSearchScraperSerpAPI(BaseScraper):
     """Scraper for Google organic search results via SerpAPI."""
 
     def __init__(self, config: Optional[ScraperConfig] = None):
