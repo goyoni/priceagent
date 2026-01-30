@@ -37,6 +37,8 @@ SELLER_ALIASES = {
     # Common variations
     "citydeal | סיטי דיל": "citydeal",
     "א.ל.מ": "alm",
+    "alm": "alm",
+    "א.ל.מ - מוצרי חשמל ודיגיטל": "alm",
     "p1000": "p1000",
     "ivory": "ivory",
     "mahsanei hashmal": "mahsanei-hashmal",
@@ -72,6 +74,7 @@ SELLER_DOMAINS = {
     "ivory": "ivory.co.il",
     "mahsanei-hashmal": "mahsanei-hashmal.co.il",
     "chashmal-neto": "chashmal-neto.co.il",
+    "alm": "alm.co.il",
 }
 
 
@@ -105,6 +108,10 @@ def normalize_seller_name(name: str, url: Optional[str] = None) -> str:
         Only use "zap" if the seller is actually Zap's own store (ZapStore, רכישה בזאפ, etc.).
     """
     name_lower = name.lower().strip()
+
+    # Handle empty name
+    if not name_lower:
+        return ""
 
     # First, check if this is a Zap-owned store - these should aggregate under "zap"
     # This handles: "ZapStore", "Zap.co.il", "רכישה בזאפ", etc.

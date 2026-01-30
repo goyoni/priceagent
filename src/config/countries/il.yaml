@@ -14,6 +14,11 @@ price_comparison_sites:
     search_path: /search?q={query}
     scraper_class: WiseBuyScraper
     priority: 1  # Secondary aggregator
+  - name: alm
+    base_url: https://www.alm.co.il
+    search_path: /catalogsearch/result/?q={query}
+    scraper_class: AlmScraper
+    priority: 2  # Direct retailer with GraphQL API
   - name: google_shopping
     base_url: https://shopping.google.com
     search_path: /search?q={query}

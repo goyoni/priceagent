@@ -14,6 +14,7 @@ from src.state.models import PriceOption, SellerInfo
 from src.tools.scraping.base_scraper import BaseScraper, ScraperConfig
 from src.tools.scraping.http_client import get_http_client, BROWSER_HEADERS
 from src.tools.scraping.registry import ScraperRegistry
+from src.tools.scraping.israel.alm_scraper import get_alm_price, is_alm_url
 
 logger = structlog.get_logger()
 
@@ -721,6 +722,22 @@ class ZapHttpScraper(BaseScraper):
                     result.url = resolved_url
                     result.seller.website = resolved_url
                     logger.debug("Resolved to seller URL", seller=result.seller.name, url=resolved_url)
+
+            # Correct prices for ALM URLs (their static HTML doesn't contain prices)
+            if is_alm_url(result.url):
+                try:
+                    correct_price = await get_alm_price(result.url)
+                    if correct_price and correct_price != result.listed_price:
+                        logger.info(
+                            "Corrected ALM price",
+                            url=result.url,
+                            old_price=result.listed_price,
+                            new_price=correct_price,
+                        )
+                        result.listed_price = correct_price
+                except Exception as e:
+                    logger.warning("Failed to correct ALM price", url=result.url, error=str(e))
+
             return result
 
         # Resolve all URLs in parallel
