@@ -26,35 +26,35 @@ function parseDiscoveryProducts(output: string): DiscoveredProduct[] {
     const parsed = JSON.parse(output);
 
     if (parsed.products && Array.isArray(parsed.products)) {
-      return parsed.products.map((p: Record<string, unknown>, index: number) => ({
-        id: p.id || `prod_${Date.now()}_${index}`,
-        name: p.name || 'Unknown Product',
-        brand: p.brand,
-        model_number: p.model_number,
-        category: p.category || 'product',
-        key_specs: Array.isArray(p.key_specs) ? p.key_specs : [],
-        price_range: p.price_range,
-        why_recommended: p.why_recommended || '',
+      return parsed.products.map((p: Record<string, unknown>, index: number): DiscoveredProduct => ({
+        id: String(p.id || `prod_${Date.now()}_${index}`),
+        name: String(p.name || 'Unknown Product'),
+        brand: p.brand ? String(p.brand) : undefined,
+        model_number: p.model_number ? String(p.model_number) : undefined,
+        category: String(p.category || 'product'),
+        key_specs: Array.isArray(p.key_specs) ? p.key_specs.map(String) : [],
+        price_range: p.price_range ? String(p.price_range) : undefined,
+        why_recommended: String(p.why_recommended || ''),
         price: typeof p.price === 'number' ? p.price : undefined,
-        currency: p.currency,
-        url: p.url,
+        currency: p.currency ? String(p.currency) : undefined,
+        url: p.url ? String(p.url) : undefined,
         rating: typeof p.rating === 'number' ? p.rating : undefined,
       }));
     }
 
     if (Array.isArray(parsed)) {
-      return parsed.map((p: Record<string, unknown>, index: number) => ({
-        id: p.id || `prod_${Date.now()}_${index}`,
-        name: p.name || 'Unknown Product',
-        brand: p.brand,
-        model_number: p.model_number,
-        category: p.category || 'product',
-        key_specs: Array.isArray(p.key_specs) ? p.key_specs : [],
-        price_range: p.price_range,
-        why_recommended: p.why_recommended || '',
+      return parsed.map((p: Record<string, unknown>, index: number): DiscoveredProduct => ({
+        id: String(p.id || `prod_${Date.now()}_${index}`),
+        name: String(p.name || 'Unknown Product'),
+        brand: p.brand ? String(p.brand) : undefined,
+        model_number: p.model_number ? String(p.model_number) : undefined,
+        category: String(p.category || 'product'),
+        key_specs: Array.isArray(p.key_specs) ? p.key_specs.map(String) : [],
+        price_range: p.price_range ? String(p.price_range) : undefined,
+        why_recommended: String(p.why_recommended || ''),
         price: typeof p.price === 'number' ? p.price : undefined,
-        currency: p.currency,
-        url: p.url,
+        currency: p.currency ? String(p.currency) : undefined,
+        url: p.url ? String(p.url) : undefined,
         rating: typeof p.rating === 'number' ? p.rating : undefined,
       }));
     }
