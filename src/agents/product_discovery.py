@@ -2,167 +2,190 @@
 
 This agent helps users discover products based on natural language requirements
 like "I need a silent fridge for a family of 4" by:
-1. Researching what attributes matter for the product category
-2. Finding products that match those requirements
-3. Validating availability in the user's country
+1. Extracting specific criteria using LLM (dB levels, capacity, etc.)
+2. Searching for products that match those criteria
+3. Analyzing and formatting results as structured JSON
 """
 
 import json
+import os
+import re
+import time
+from typing import Optional
+
 from agents import Agent, function_tool
+from openai import AsyncOpenAI
 
 from src.tools.scraping import ScraperRegistry
 from src.cache import cached
 from src.observability import report_progress, record_search, record_error, record_warning
 
 
-async def _research_product_category_impl(
-    requirement: str,
-    category: str,
-    country: str = "IL",
-) -> str:
-    """Research what attributes matter for a product category based on user requirements.
+# Initialize OpenAI client for LLM calls within tools
+def get_openai_client() -> AsyncOpenAI:
+    """Get OpenAI client with API key from environment."""
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        raise ValueError("OPENAI_API_KEY environment variable not set")
+    return AsyncOpenAI(api_key=api_key)
 
-    Uses web search to find product guides and reviews to understand what specs
-    are important (e.g., noise level for fridges, drum size for washing machines).
+
+# ============================================================================
+# Tool 1: Extract Product Criteria
+# ============================================================================
+
+async def _extract_product_criteria_impl(
+    requirement: str,
+) -> str:
+    """Extract specific, searchable criteria from user's natural language requirement.
+
+    Uses LLM to analyze the requirement and determine concrete specifications
+    like noise level thresholds, capacity requirements, energy ratings, etc.
 
     Args:
         requirement: User's natural language requirement (e.g., "silent fridge for family of 4")
-        category: Product category (e.g., "refrigerator", "washing machine")
-        country: Country code for localized search (default: IL for Israel)
 
     Returns:
-        A summary of key attributes to look for and recommended specifications
+        JSON with extracted criteria, search terms, and recommended brands
     """
     import structlog
-    import httpx
-    from src.config.settings import settings
-
     logger = structlog.get_logger()
 
     await report_progress(
-        "📚 Researching",
-        f"Learning about {category} features for: {requirement}"
+        "🧠 Analyzing requirements",
+        f"Extracting criteria from: {requirement}"
     )
 
-    # Use web search to find buying guides
-    search_queries = [
-        f"best {category} buying guide {requirement}",
-        f"how to choose {category} for {requirement}",
-        f"{category} specifications explained",
-    ]
+    # Use LLM to extract structured criteria
+    try:
+        client = get_openai_client()
 
-    research_results = []
+        system_prompt = """You are a product specification expert. Your task is to analyze a user's natural language
+product requirement and extract specific, measurable criteria for product selection.
 
-    for query in search_queries[:2]:  # Limit to 2 queries
-        if not settings.serpapi_key:
-            await record_warning("No SerpAPI key configured for web research")
-            break
+For each requirement, determine:
+1. The product category
+2. Specific numeric criteria (e.g., noise < 40 dB, capacity > 400L)
+3. Effective search terms to find matching products
+4. Recommended brands known for these features
 
-        try:
-            params = {
-                "engine": "google",
-                "q": query,
-                "gl": country.lower(),
-                "hl": "en",
-                "api_key": settings.serpapi_key,
-                "num": 5,
-            }
+You MUST respond with valid JSON only, no other text."""
 
-            async with httpx.AsyncClient(timeout=15.0) as client:
-                response = await client.get("https://serpapi.com/search.json", params=params)
-                if response.status_code == 200:
-                    data = response.json()
-                    organic_results = data.get("organic_results", [])
+        user_prompt = f"""Analyze this product requirement and extract specific criteria:
 
-                    for result in organic_results[:3]:
-                        title = result.get("title", "")
-                        snippet = result.get("snippet", "")
-                        if title and snippet:
-                            research_results.append(f"• {title}: {snippet}")
+"{requirement}"
 
-                    await record_search("google_research", cached=False)
+Respond with this exact JSON structure:
+{{
+  "category": "the product category (e.g., refrigerator, washing machine)",
+  "criteria": [
+    {{
+      "attribute": "attribute name (e.g., noise_level, capacity, energy_rating)",
+      "value": "specific threshold (e.g., <40, >400, A++)",
+      "unit": "unit of measurement (e.g., dB, liters, rating)",
+      "reason": "why this matters for the user's needs"
+    }}
+  ],
+  "search_terms": ["list of effective search queries"],
+  "recommended_brands": ["brands known for these features"],
+  "price_range_estimate": "estimated price range in local currency"
+}}"""
 
-        except Exception as e:
-            logger.warning("Research query failed", query=query, error=str(e))
-            await record_error(f"Research failed: {str(e)[:100]}")
+        response = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.3,
+            max_tokens=1000,
+        )
 
-    if not research_results:
-        # Fallback to general knowledge
-        return f"""Research for {category} matching "{requirement}":
+        result_text = response.choices[0].message.content.strip()
 
-Based on general knowledge:
-1. For quiet operation: Look for noise levels under 40 dB
-2. For family use: Consider capacity and energy efficiency
-3. For reliability: Check brand reputation and warranty
+        # Clean up response - remove markdown code blocks if present
+        if result_text.startswith("```"):
+            result_text = re.sub(r'^```(?:json)?\n?', '', result_text)
+            result_text = re.sub(r'\n?```$', '', result_text)
 
-Key attributes to consider:
-- Noise level (dB)
-- Energy rating
-- Capacity
-- Warranty period
-- Brand reliability
+        # Validate JSON
+        criteria = json.loads(result_text)
 
-Please use search_recommended_products to find specific models matching these criteria."""
+        await report_progress(
+            "✅ Criteria extracted",
+            f"Found {len(criteria.get('criteria', []))} specific criteria"
+        )
 
-    await report_progress(
-        "✅ Research complete",
-        f"Found {len(research_results)} relevant guides"
-    )
+        # Log extracted criteria for debugging
+        logger.info("Extracted criteria", requirement=requirement, criteria=criteria)
 
-    output = f"""Research for {category} matching "{requirement}":
+        return json.dumps(criteria, indent=2)
 
-{chr(10).join(research_results[:6])}
+    except json.JSONDecodeError as e:
+        logger.error("Failed to parse criteria JSON", error=str(e), response=result_text[:500])
+        await record_error(f"Criteria extraction JSON error: {str(e)}")
+        # Return fallback criteria
+        return json.dumps({
+            "category": "appliance",
+            "criteria": [{"attribute": "general", "value": "high quality", "unit": "", "reason": "Based on user requirements"}],
+            "search_terms": [requirement],
+            "recommended_brands": [],
+            "price_range_estimate": "varies"
+        })
 
-Key takeaways for your search:
-1. Look for models that specifically address: {requirement}
-2. Compare energy ratings and noise levels
-3. Check availability in {country}
+    except Exception as e:
+        logger.error("Criteria extraction failed", error=str(e))
+        await record_error(f"Criteria extraction failed: {str(e)[:100]}")
+        return json.dumps({
+            "category": "appliance",
+            "criteria": [],
+            "search_terms": [requirement],
+            "recommended_brands": [],
+            "error": str(e)
+        })
 
-Use search_recommended_products to find specific models matching these criteria."""
 
-    return output
-
-
-_research_product_category_cached = cached(
-    cache_type="agent", key_prefix="research_category"
-)(_research_product_category_impl)
-research_product_category = function_tool(
-    _research_product_category_cached, name_override="research_product_category"
+_extract_product_criteria_cached = cached(
+    cache_type="agent", key_prefix="extract_criteria"
+)(_extract_product_criteria_impl)
+extract_product_criteria = function_tool(
+    _extract_product_criteria_cached, name_override="extract_product_criteria"
 )
 
 
-async def _search_recommended_products_impl(
-    category: str,
-    requirements: str,
-    country: str = "IL",
-    max_results: int = 10,
-) -> str:
-    """Search for products that match the user's requirements using local scrapers.
+# ============================================================================
+# Tool 2: Search Products (Improved)
+# ============================================================================
 
-    Uses existing scrapers (Zap, WiseBuy) to find actual products available
-    in the user's country, filtering by the requirements.
+async def _search_products_with_criteria_impl(
+    search_terms: str,
+    category: str,
+    country: str = "IL",
+    max_results: int = 15,
+) -> str:
+    """Search for products using targeted search terms.
 
     Args:
-        category: Product category (e.g., "refrigerator", "washing machine")
-        requirements: Key requirements to filter by (e.g., "silent, large capacity")
+        search_terms: Comma-separated search terms from criteria extraction
+        category: Product category for context
         country: Country code (default: IL)
         max_results: Maximum number of products to return
 
     Returns:
-        JSON-formatted list of recommended products with specs and prices
+        JSON list of raw product results with names, prices, URLs
     """
     import structlog
     from src.tools.scraping.filters import deduplicate_results
 
     logger = structlog.get_logger()
 
+    # Parse search terms
+    terms = [t.strip() for t in search_terms.split(",")]
+
     await report_progress(
         "🔍 Searching products",
-        f"Finding {category} matching: {requirements}"
+        f"Running {len(terms)} targeted searches for {category}"
     )
-
-    # Build search query combining category and key requirements
-    search_query = f"{category} {requirements}".strip()
 
     scrapers = ScraperRegistry.get_scrapers_for_country(country)
 
@@ -175,35 +198,36 @@ async def _search_recommended_products_impl(
     all_results = []
     errors = []
 
-    # Run scrapers sequentially
-    for scraper in scrapers:
-        await report_progress(
-            f"🔍 {scraper.name}",
-            f"Searching for {search_query}..."
-        )
+    # Search with each term
+    for term in terms[:3]:  # Limit to 3 search terms
+        for scraper in scrapers:
+            await report_progress(
+                f"🔍 {scraper.name}",
+                f"Searching: {term}"
+            )
 
-        try:
-            results = await scraper.search(search_query, max_results)
-            await record_search(scraper.name, cached=False)
+            try:
+                results = await scraper.search(term, max_results=max_results // len(terms))
+                await record_search(scraper.name, cached=False)
 
-            if results:
-                await report_progress(
-                    f"✅ {scraper.name}",
-                    f"Found {len(results)} products"
-                )
-                all_results.extend(results)
-            else:
-                await report_progress(f"⚠️ {scraper.name}", "No results found")
+                if results:
+                    await report_progress(
+                        f"✅ {scraper.name}",
+                        f"Found {len(results)} results for '{term}'"
+                    )
+                    all_results.extend(results)
+                else:
+                    await report_progress(f"⚠️ {scraper.name}", f"No results for '{term}'")
 
-        except Exception as e:
-            await report_progress(f"❌ {scraper.name}", f"Error: {str(e)[:100]}")
-            await record_error(f"{scraper.name}: {str(e)[:200]}")
-            errors.append(f"{scraper.name}: {str(e)}")
+            except Exception as e:
+                await report_progress(f"❌ {scraper.name}", f"Error: {str(e)[:100]}")
+                await record_error(f"{scraper.name}: {str(e)[:200]}")
+                errors.append(f"{scraper.name}: {str(e)[:50]}")
 
     if not all_results:
         return json.dumps({
-            "error": "No products found matching requirements",
-            "query": search_query,
+            "error": "No products found",
+            "search_terms": terms,
             "errors": errors,
             "products": []
         })
@@ -211,60 +235,222 @@ async def _search_recommended_products_impl(
     # Deduplicate
     all_results = deduplicate_results(all_results)
 
-    # Convert to discovered products format
-    discovered_products = []
-    seen_products = set()
+    # Convert to simple format for LLM analysis
+    products = []
+    seen_names = set()
 
     for result in all_results[:max_results]:
-        # Create unique key for deduplication by product name
-        product_key = result.seller.name.lower()[:30]
-        if product_key in seen_products:
-            continue
-        seen_products.add(product_key)
+        name = result.seller.name
+        name_key = name.lower()[:40]
 
-        # Extract product info
-        product = {
-            "name": result.seller.name,  # In price results, seller.name often contains product name
-            "brand": extract_brand(result.seller.name),
-            "model_number": extract_model_number(result.seller.name),
-            "category": category,
+        if name_key in seen_names:
+            continue
+        seen_names.add(name_key)
+
+        products.append({
+            "name": name,
+            "brand": extract_brand(name),
+            "model_number": extract_model_number(name),
             "price": result.listed_price,
             "currency": result.currency,
             "url": result.url,
             "source": result.seller.source,
             "rating": result.seller.reliability_score,
-        }
-        discovered_products.append(product)
+        })
 
     await report_progress(
         "✅ Search complete",
-        f"Found {len(discovered_products)} unique products"
+        f"Found {len(products)} unique products"
     )
 
-    # Format output for LLM to analyze
-    output = f"""Found {len(discovered_products)} products matching "{requirements}":
-
-"""
-    for i, product in enumerate(discovered_products[:10], 1):
-        rating_str = f" (Rating: {product['rating']:.1f}/5)" if product.get('rating') else ""
-        output += f"""{i}. {product['name']}{rating_str}
-   Price: {product['price']:,.0f} {product['currency']}
-   URL: {product['url']}
-
-"""
-
-    if errors:
-        output += f"\nNote: Some sources had issues: {'; '.join(errors)}"
-
-    return output
+    return json.dumps({
+        "category": category,
+        "products": products,
+        "search_terms_used": terms[:3],
+        "total_found": len(products),
+    }, indent=2)
 
 
-def extract_brand(product_name: str) -> str | None:
+_search_products_with_criteria_cached = cached(
+    cache_type="agent", key_prefix="search_with_criteria"
+)(_search_products_with_criteria_impl)
+search_products_with_criteria = function_tool(
+    _search_products_with_criteria_cached, name_override="search_products_with_criteria"
+)
+
+
+# ============================================================================
+# Tool 3: Analyze and Format Products
+# ============================================================================
+
+async def _analyze_and_format_products_impl(
+    products_json: str,
+    criteria_json: str,
+    original_requirement: str,
+) -> str:
+    """Analyze products against criteria and format for frontend display.
+
+    Uses LLM to:
+    1. Extract specs from product names/descriptions
+    2. Score products against criteria
+    3. Generate "why recommended" explanations
+    4. Format as DiscoveredProduct[] JSON
+
+    Args:
+        products_json: JSON string of raw products from search
+        criteria_json: JSON string of criteria from extraction
+        original_requirement: Original user requirement for context
+
+    Returns:
+        JSON with products array matching frontend DiscoveredProduct type
+    """
+    import structlog
+    logger = structlog.get_logger()
+
+    await report_progress(
+        "📊 Analyzing products",
+        "Matching products to your criteria..."
+    )
+
+    try:
+        products = json.loads(products_json)
+        criteria = json.loads(criteria_json)
+    except json.JSONDecodeError as e:
+        logger.error("Failed to parse input JSON", error=str(e))
+        return json.dumps({"products": [], "error": f"Invalid input: {str(e)}"})
+
+    product_list = products.get("products", [])
+    criteria_list = criteria.get("criteria", [])
+    category = criteria.get("category", "product")
+
+    if not product_list:
+        return json.dumps({"products": [], "error": "No products to analyze"})
+
+    try:
+        client = get_openai_client()
+
+        system_prompt = """You are a product analyst. Given a list of products and selection criteria,
+analyze each product and determine how well it matches the criteria.
+
+For each product, extract any visible specs from the product name and determine:
+1. Which criteria it likely meets (based on brand reputation, model patterns, etc.)
+2. A clear "why recommended" explanation
+
+You MUST respond with valid JSON only, no other text."""
+
+        user_prompt = f"""Analyze these products for a customer looking for: "{original_requirement}"
+
+CRITERIA TO MATCH:
+{json.dumps(criteria_list, indent=2)}
+
+PRODUCTS FOUND:
+{json.dumps(product_list[:15], indent=2)}
+
+For each product that matches the criteria well, output in this exact JSON format:
+{{
+  "products": [
+    {{
+      "id": "prod_<timestamp>_<index>",
+      "name": "full product name",
+      "brand": "brand name",
+      "model_number": "model if found",
+      "category": "{category}",
+      "key_specs": ["spec 1", "spec 2", "spec 3"],
+      "price_range": "₪X,XXX - ₪X,XXX",
+      "why_recommended": "Clear explanation of how this product meets the user's specific requirements"
+    }}
+  ]
+}}
+
+IMPORTANT:
+- Include only products that likely meet the criteria (3-5 best matches)
+- For key_specs, include specific specs like "Noise: ~38 dB", "Capacity: 600L" if inferable
+- Price range should use the product's actual price
+- why_recommended should directly reference the user's requirements
+- Generate unique IDs using current timestamp"""
+
+        response = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.3,
+            max_tokens=2000,
+        )
+
+        result_text = response.choices[0].message.content.strip()
+
+        # Clean up response
+        if result_text.startswith("```"):
+            result_text = re.sub(r'^```(?:json)?\n?', '', result_text)
+            result_text = re.sub(r'\n?```$', '', result_text)
+
+        result = json.loads(result_text)
+
+        # Ensure products have valid IDs
+        timestamp = int(time.time() * 1000)
+        for i, product in enumerate(result.get("products", [])):
+            if not product.get("id") or not product["id"].startswith("prod_"):
+                product["id"] = f"prod_{timestamp}_{i}"
+
+        await report_progress(
+            "✅ Analysis complete",
+            f"Found {len(result.get('products', []))} matching products"
+        )
+
+        logger.info("Product analysis complete",
+                   input_count=len(product_list),
+                   output_count=len(result.get("products", [])))
+
+        return json.dumps(result, indent=2)
+
+    except json.JSONDecodeError as e:
+        logger.error("Failed to parse analysis JSON", error=str(e), response=result_text[:500])
+        await record_error(f"Product analysis JSON error: {str(e)}")
+
+        # Fallback: format products without LLM analysis
+        fallback_products = []
+        timestamp = int(time.time() * 1000)
+        for i, p in enumerate(product_list[:5]):
+            fallback_products.append({
+                "id": f"prod_{timestamp}_{i}",
+                "name": p.get("name", "Unknown"),
+                "brand": p.get("brand"),
+                "model_number": p.get("model_number"),
+                "category": category,
+                "key_specs": [],
+                "price_range": f"₪{p.get('price', 0):,.0f}",
+                "why_recommended": "Found matching your search criteria"
+            })
+
+        return json.dumps({"products": fallback_products})
+
+    except Exception as e:
+        logger.error("Product analysis failed", error=str(e))
+        await record_error(f"Product analysis failed: {str(e)[:100]}")
+        return json.dumps({"products": [], "error": str(e)})
+
+
+_analyze_and_format_products_cached = cached(
+    cache_type="agent", key_prefix="analyze_products"
+)(_analyze_and_format_products_impl)
+analyze_and_format_products = function_tool(
+    _analyze_and_format_products_cached, name_override="analyze_and_format_products"
+)
+
+
+# ============================================================================
+# Helper Functions
+# ============================================================================
+
+def extract_brand(product_name: str) -> Optional[str]:
     """Extract brand from product name."""
     known_brands = [
         "Samsung", "LG", "Bosch", "Siemens", "Miele", "AEG", "Electrolux",
         "Haier", "Whirlpool", "Beko", "Candy", "Gorenje", "Hisense",
         "Apple", "Sony", "Dell", "HP", "Lenovo", "Asus", "Acer",
+        "Panasonic", "Sharp", "Toshiba", "Hitachi", "Frigidaire",
     ]
     name_lower = product_name.lower()
     for brand in known_brands:
@@ -273,10 +459,8 @@ def extract_brand(product_name: str) -> str | None:
     return None
 
 
-def extract_model_number(product_name: str) -> str | None:
+def extract_model_number(product_name: str) -> Optional[str]:
     """Extract model number from product name using common patterns."""
-    import re
-    # Match alphanumeric model numbers like RF72DG9620B1, WH-1000XM5, etc.
     patterns = [
         r'\b([A-Z]{2,3}\d{2,}[A-Z0-9]*)\b',  # RF72DG9620B1
         r'\b([A-Z]{1,2}-?\d{3,}[A-Z0-9]*)\b',  # WH-1000XM5
@@ -289,137 +473,57 @@ def extract_model_number(product_name: str) -> str | None:
     return None
 
 
-_search_recommended_products_cached = cached(
-    cache_type="agent", key_prefix="search_recommended"
-)(_search_recommended_products_impl)
-search_recommended_products = function_tool(
-    _search_recommended_products_cached, name_override="search_recommended_products"
-)
+# ============================================================================
+# Product Discovery Agent
+# ============================================================================
 
-
-async def _validate_availability_impl(
-    model_number: str,
-    country: str = "IL",
-) -> str:
-    """Quick check if a specific model is available in a country.
-
-    Args:
-        model_number: The specific model number to check
-        country: Country code (default: IL)
-
-    Returns:
-        Availability status with price range if found
-    """
-    import structlog
-
-    logger = structlog.get_logger()
-
-    await report_progress(
-        "🔎 Checking availability",
-        f"Looking for {model_number} in {country}..."
-    )
-
-    scrapers = ScraperRegistry.get_scrapers_for_country(country)
-
-    if not scrapers:
-        return f"No scrapers available for country: {country}"
-
-    found_results = []
-
-    for scraper in scrapers[:2]:  # Quick check - only use first 2 scrapers
-        try:
-            results = await scraper.search(model_number, max_results=5)
-            if results:
-                for result in results:
-                    found_results.append({
-                        "seller": result.seller.name,
-                        "price": result.listed_price,
-                        "currency": result.currency,
-                        "url": result.url,
-                    })
-                await record_search(scraper.name, cached=False)
-                break  # Found results, no need to continue
-
-        except Exception as e:
-            logger.warning("Availability check failed", scraper=scraper.name, error=str(e))
-
-    if not found_results:
-        return f"Model {model_number} not found in {country}. It may not be available locally."
-
-    # Calculate price range
-    prices = [r["price"] for r in found_results]
-    min_price = min(prices)
-    max_price = max(prices)
-
-    await report_progress(
-        "✅ Available",
-        f"Found {len(found_results)} listings for {model_number}"
-    )
-
-    if min_price == max_price:
-        price_range = f"{min_price:,.0f} ILS"
-    else:
-        price_range = f"{min_price:,.0f} - {max_price:,.0f} ILS"
-
-    return f"""Model {model_number} is available in {country}!
-
-Price range: {price_range}
-Found at {len(found_results)} seller(s):
-{chr(10).join(f"  • {r['seller']}: {r['price']:,.0f} {r['currency']}" for r in found_results[:5])}
-
-Use search_products for a full price comparison."""
-
-
-_validate_availability_cached = cached(
-    cache_type="agent", key_prefix="validate_availability"
-)(_validate_availability_impl)
-validate_availability = function_tool(
-    _validate_availability_cached, name_override="validate_availability"
-)
-
-
-# Define the product discovery agent
 product_discovery_agent = Agent(
     name="ProductDiscovery",
-    instructions="""You are a product discovery specialist. Your job is to help users find the right products
-based on their natural language requirements.
+    instructions="""You are a product discovery specialist that helps users find products matching their requirements.
 
-WORKFLOW:
-1. When a user describes what they need (e.g., "I need a silent fridge for a family of 4"):
-   - First use research_product_category to understand what specs matter for their use case
-   - Then use search_recommended_products to find matching products
-   - Optionally validate_availability for specific models
+## WORKFLOW (Follow these steps in order):
 
-2. Present recommendations in a structured format with:
-   - Product name and model number
-   - Key specs that match requirements
-   - Price range
-   - Why it's recommended for their needs
+1. **EXTRACT CRITERIA** - Use `extract_product_criteria` with the user's requirement
+   - This extracts specific specs (e.g., noise < 40 dB, capacity > 400L)
+   - Returns search terms and recommended brands
 
-IMPORTANT:
-- Focus on matching user requirements, not just finding the cheapest option
-- Explain WHY each product is a good match
-- Consider brand reliability and warranty
-- Always check availability in the user's country
+2. **SEARCH PRODUCTS** - Use `search_products_with_criteria`
+   - Pass the search_terms from step 1 (comma-separated)
+   - Pass the category from step 1
+   - Returns raw product listings
 
-OUTPUT FORMAT:
-Present 3-5 recommended products in this format:
+3. **ANALYZE & FORMAT** - Use `analyze_and_format_products`
+   - Pass the products JSON from step 2
+   - Pass the criteria JSON from step 1
+   - Pass the original user requirement
+   - Returns formatted products matching frontend expectations
 
-## Recommended Products for [requirement]
+## OUTPUT FORMAT:
 
-### 1. [Product Name] - [Model Number]
-**Brand:** [Brand]
-**Price Range:** [Price Range]
-**Key Specs:**
-- [Spec 1]
-- [Spec 2]
-**Why Recommended:** [Explanation of how it matches requirements]
-**Availability:** Available in [country] at [X] stores
+After completing all 3 steps, return ONLY the JSON from step 3.
+The JSON must have this structure:
+```json
+{
+  "products": [
+    {
+      "id": "prod_...",
+      "name": "Product Name",
+      "brand": "Brand",
+      "model_number": "MODEL123",
+      "category": "refrigerator",
+      "key_specs": ["Noise: 38 dB", "Capacity: 640L"],
+      "price_range": "₪12,000 - ₪14,000",
+      "why_recommended": "Explanation of why this matches requirements"
+    }
+  ]
+}
+```
 
-[Repeat for each product]
-
-## Summary
-[Brief comparison and recommendation based on user priorities]
+## IMPORTANT:
+- Always complete all 3 steps
+- Your final response must be ONLY valid JSON (no markdown, no explanation)
+- Include 3-5 products that best match the criteria
+- Each product must have why_recommended explaining the match
 """,
-    tools=[research_product_category, search_recommended_products, validate_availability],
+    tools=[extract_product_criteria, search_products_with_criteria, analyze_and_format_products],
 )

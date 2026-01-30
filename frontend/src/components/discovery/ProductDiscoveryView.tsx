@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useDiscoveryStore } from '@/stores/useDiscoveryStore';
 import { DiscoveryResultsTable } from './DiscoveryResultsTable';
 import { CountrySelector } from '@/components/ui/CountrySelector';
@@ -17,6 +17,69 @@ interface ProductDiscoveryViewProps {
   onCountryChange?: (country: string) => void;
 }
 
+/**
+ * Parse discovery products from agent output.
+ */
+function parseDiscoveryProducts(output: string): DiscoveredProduct[] {
+  try {
+    // Try to parse as JSON directly
+    const parsed = JSON.parse(output);
+
+    if (parsed.products && Array.isArray(parsed.products)) {
+      return parsed.products.map((p: Record<string, unknown>, index: number) => ({
+        id: p.id || `prod_${Date.now()}_${index}`,
+        name: p.name || 'Unknown Product',
+        brand: p.brand,
+        model_number: p.model_number,
+        category: p.category || 'product',
+        key_specs: Array.isArray(p.key_specs) ? p.key_specs : [],
+        price_range: p.price_range,
+        why_recommended: p.why_recommended || '',
+        price: typeof p.price === 'number' ? p.price : undefined,
+        currency: p.currency,
+        url: p.url,
+        rating: typeof p.rating === 'number' ? p.rating : undefined,
+      }));
+    }
+
+    if (Array.isArray(parsed)) {
+      return parsed.map((p: Record<string, unknown>, index: number) => ({
+        id: p.id || `prod_${Date.now()}_${index}`,
+        name: p.name || 'Unknown Product',
+        brand: p.brand,
+        model_number: p.model_number,
+        category: p.category || 'product',
+        key_specs: Array.isArray(p.key_specs) ? p.key_specs : [],
+        price_range: p.price_range,
+        why_recommended: p.why_recommended || '',
+        price: typeof p.price === 'number' ? p.price : undefined,
+        currency: p.currency,
+        url: p.url,
+        rating: typeof p.rating === 'number' ? p.rating : undefined,
+      }));
+    }
+
+    console.log('[Discovery] Output is not a products array:', parsed);
+    return [];
+  } catch (e) {
+    // Try to extract JSON from markdown or mixed content
+    const jsonMatch = output.match(/\{[\s\S]*"products"[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        const parsed = JSON.parse(jsonMatch[0]);
+        if (parsed.products && Array.isArray(parsed.products)) {
+          return parseDiscoveryProducts(JSON.stringify(parsed));
+        }
+      } catch {
+        console.log('[Discovery] Failed to extract JSON from output');
+      }
+    }
+
+    console.log('[Discovery] Failed to parse output as JSON:', e);
+    return [];
+  }
+}
+
 export function ProductDiscoveryView({
   onAddToShoppingList,
   country,
@@ -26,15 +89,20 @@ export function ProductDiscoveryView({
     query,
     setQuery,
     isSearching,
+    currentTraceId,
     products,
     error,
     statusMessage,
+    setStatusMessage,
+    setError,
     runDiscovery,
+    setSearchComplete,
     clearResults,
   } = useDiscoveryStore();
 
   const [addingProductId, setAddingProductId] = useState<string | undefined>();
   const [localQuery, setLocalQuery] = useState(query);
+  const wsRef = useRef<WebSocket | null>(null);
 
   // Example queries for suggestions
   const exampleQueries = [
@@ -43,6 +111,99 @@ export function ProductDiscoveryView({
     'Quiet dishwasher with good drying',
     'Large capacity oven for baking',
   ];
+
+  // WebSocket listener for trace completion
+  useEffect(() => {
+    if (!currentTraceId || !isSearching) return;
+
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+    const wsUrl = apiUrl.replace('http', 'ws') || 'ws://localhost:8000';
+
+    console.log('[Discovery] Connecting WebSocket for trace:', currentTraceId);
+
+    const ws = new WebSocket(`${wsUrl}/traces/ws`);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      console.log('[Discovery] WebSocket connected');
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+
+        // Only process events for our trace
+        if (data.trace_id !== currentTraceId) return;
+
+        // Update status message from span events
+        if (data.event_type === 'span_started' && data.data?.name) {
+          setStatusMessage(data.data.name);
+        }
+
+        // Handle trace completion
+        if (data.event_type === 'trace_ended') {
+          console.log('[Discovery] Trace completed:', currentTraceId);
+
+          if (data.data?.error) {
+            console.error('[Discovery] Trace error:', data.data.error);
+            setError(data.data.error);
+            setSearchComplete([]);
+          } else {
+            const finalOutput = data.data?.final_output || '';
+            console.log('[Discovery] Final output length:', finalOutput.length);
+            console.log('[Discovery] Final output preview:', finalOutput.substring(0, 500));
+
+            const products = parseDiscoveryProducts(finalOutput);
+            console.log('[Discovery] Parsed products:', products.length);
+
+            if (products.length === 0 && finalOutput.length > 0) {
+              console.log('[Discovery] No products parsed, full output:', finalOutput);
+            }
+
+            setSearchComplete(products);
+          }
+
+          ws.close();
+        }
+      } catch (err) {
+        console.error('[Discovery] WebSocket message parse error:', err);
+      }
+    };
+
+    ws.onerror = (err) => {
+      console.error('[Discovery] WebSocket error:', err);
+    };
+
+    ws.onclose = () => {
+      console.log('[Discovery] WebSocket closed');
+
+      // If still searching when WebSocket closes, try to fetch trace directly
+      if (isSearching && currentTraceId) {
+        console.log('[Discovery] Fetching trace directly as fallback');
+        fetch(`${apiUrl}/traces/${currentTraceId}`)
+          .then((res) => res.json())
+          .then((trace) => {
+            if (trace.status === 'completed' && trace.final_output) {
+              const products = parseDiscoveryProducts(trace.final_output);
+              setSearchComplete(products);
+            } else if (trace.status === 'error') {
+              setError(trace.error || 'Discovery failed');
+              setSearchComplete([]);
+            }
+          })
+          .catch((err) => {
+            console.error('[Discovery] Fallback fetch failed:', err);
+          });
+      }
+    };
+
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+    };
+  }, [currentTraceId, isSearching, setStatusMessage, setError, setSearchComplete]);
 
   const handleSearch = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
