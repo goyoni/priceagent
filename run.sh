@@ -54,6 +54,14 @@ echo -e "${YELLOW}Checking Python dependencies...${NC}"
 pip install -q sqlalchemy[asyncio] --trusted-host pypi.org --trusted-host files.pythonhosted.org 2>/dev/null || true
 echo -e "${GREEN}✓${NC} Python dependencies ready"
 
+# Build frontend for production (serves on port 8000)
+echo ""
+echo -e "${YELLOW}Building frontend...${NC}"
+cd "$FRONTEND_DIR"
+npm run build > /dev/null 2>&1
+cd "$PROJECT_DIR"
+echo -e "${GREEN}✓${NC} Frontend built (static files in frontend/out/)"
+
 # Function to cleanup background processes on exit
 cleanup() {
     echo ""
@@ -91,9 +99,9 @@ echo ""
 echo -e "${YELLOW}Starting Python backend...${NC}"
 echo ""
 echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN}  Dashboard: http://localhost:3000     ${NC}"
-echo -e "${GREEN}  API:       http://localhost:8000     ${NC}"
-echo -e "${GREEN}  Old UI:    http://localhost:8000/dashboard ${NC}"
+echo -e "${GREEN}  App:       http://localhost:8000     ${NC}"
+echo -e "${GREEN}  Dev:       http://localhost:3000     ${NC}"
+echo -e "${GREEN}  API:       http://localhost:8000/agent ${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
 echo -e "${YELLOW}Press Ctrl+C to stop all services${NC}"
