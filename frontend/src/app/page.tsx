@@ -37,56 +37,78 @@ export default function SearchPage() {
     trackPageView('/');
   }, []);
 
-  // Poll for trace results
-  const pollForResults = async (traceId: string, apiUrl: string): Promise<string> => {
-    const maxAttempts = 300; // 5 minutes max
-    const pollInterval = 1000; // 1 second
+  // Wait for trace completion via WebSocket
+  const waitForResults = (traceId: string, apiUrl: string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const wsUrl = apiUrl.replace('http://', 'ws://').replace('https://', 'wss://') ||
+                    `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`;
 
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      try {
-        const response = await fetch(`${apiUrl}/traces/${traceId}`);
-        if (!response.ok) {
-          // Trace might not exist yet, keep polling
-          if (response.status === 404 && attempt < 10) {
-            await new Promise(resolve => setTimeout(resolve, pollInterval));
-            continue;
+      const ws = new WebSocket(`${wsUrl}/traces/ws`);
+      let resolved = false;
+
+      const cleanup = () => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.close();
+        }
+      };
+
+      ws.onopen = () => {
+        setStatusMessage('Connected, waiting for results...');
+      };
+
+      ws.onmessage = async (event) => {
+        try {
+          const data = JSON.parse(event.data);
+
+          // Only care about events for our trace
+          if (data.trace_id !== traceId) return;
+
+          if (data.event_type === 'span_started' || data.event_type === 'span_ended') {
+            // Update status with current activity
+            const spanName = data.data?.name || 'Processing...';
+            setStatusMessage(spanName);
           }
-          throw new Error('Failed to fetch results');
-        }
 
-        const trace = await response.json();
+          if (data.event_type === 'trace_ended') {
+            resolved = true;
+            cleanup();
 
-        // Update status message based on current activity
-        if (trace.spans && trace.spans.length > 0) {
-          const runningSpan = trace.spans.find((s: { status: string }) => s.status === 'running');
-          if (runningSpan) {
-            setStatusMessage(runningSpan.name || 'Processing...');
-          } else {
-            setStatusMessage(`Processing... (${trace.spans.length} steps completed)`);
+            if (data.data?.error) {
+              reject(new Error(data.data.error));
+            } else {
+              resolve(data.data?.final_output || '');
+            }
           }
+        } catch (err) {
+          console.error('WebSocket message parse error:', err);
         }
+      };
 
-        if (trace.status === 'completed') {
-          return trace.final_output || '';
+      ws.onerror = () => {
+        if (!resolved) {
+          cleanup();
+          reject(new Error('WebSocket connection failed'));
         }
+      };
 
-        if (trace.status === 'error') {
-          throw new Error(trace.error || 'Search failed');
+      ws.onclose = () => {
+        if (!resolved) {
+          // Fallback: fetch the trace directly
+          fetch(`${apiUrl}/traces/${traceId}`)
+            .then(res => res.json())
+            .then(trace => {
+              if (trace.status === 'completed') {
+                resolve(trace.final_output || '');
+              } else if (trace.status === 'error') {
+                reject(new Error(trace.error || 'Search failed'));
+              } else {
+                reject(new Error('Connection lost. Check the dashboard for results.'));
+              }
+            })
+            .catch(() => reject(new Error('Connection lost. Check the dashboard for results.')));
         }
-
-        // Wait before next poll
-        await new Promise(resolve => setTimeout(resolve, pollInterval));
-      } catch (err) {
-        // Network error - retry a few times
-        if (attempt < maxAttempts - 1) {
-          await new Promise(resolve => setTimeout(resolve, pollInterval));
-          continue;
-        }
-        throw err;
-      }
-    }
-
-    throw new Error('Search timed out. Check the dashboard for results.');
+      };
+    });
   };
 
   const handleSearch = useCallback(async (e: React.FormEvent) => {
@@ -118,8 +140,8 @@ export default function SearchPage() {
 
       const { trace_id } = await response.json();
 
-      // Poll for results
-      const resultText = await pollForResults(trace_id, apiUrl);
+      // Wait for results via WebSocket
+      const resultText = await waitForResults(trace_id, apiUrl);
       const duration = Date.now() - startTime;
       setSearchTime(duration);
       setStatusMessage(null);
