@@ -18,6 +18,7 @@ import {
   clearSearchHistory,
   formatRelativeTime,
 } from '@/lib/searchHistory';
+import type { DiscoveryHistoryItem } from '@/lib/discoveryHistory';
 import { api } from '@/lib/api';
 import { useDraftStore } from '@/stores/useDraftStore';
 import { DraftModal } from '@/components/drafts/DraftModal';
@@ -167,6 +168,7 @@ function SearchPageContent() {
   const {
     history: discoveryHistory,
     loadHistory: loadDiscoveryHistory,
+    loadFromTrace: loadDiscoveryFromTrace,
   } = useDiscoveryStore();
 
   const [query, setQuery] = useState('');
@@ -383,9 +385,11 @@ function SearchPageContent() {
       const response = await fetch(`${apiUrl}/traces/?limit=20`);
       if (response.ok) {
         const data = await response.json();
-        // Filter to only completed traces
+        // Filter to only completed traces, excluding test traces
         const completed = (data.traces || []).filter(
-          (t: ServerTrace) => t.status === 'completed'
+          (t: ServerTrace) =>
+            t.status === 'completed' &&
+            !t.input_prompt.toLowerCase().includes('test')
         );
         setRecentTraces(completed);
       }
@@ -836,6 +840,8 @@ function SearchPageContent() {
   // Handle click on localStorage history item
   const handleLocalHistoryClick = (item: SearchHistoryItem) => {
     console.log('[LocalHistory] Clicked item:', item.id, item.query, 'traceId:', item.traceId);
+    // Switch to search tab to show results
+    setActiveTab('search');
     if (item.traceId) {
       updateUrlWithTrace(item.traceId);
       loadTraceResults(item.traceId);
@@ -854,6 +860,16 @@ function SearchPageContent() {
         setRecentTraces(prev => prev.filter(t => t.id !== id));
       })
       .catch(err => console.error('[History] Delete failed:', err));
+  };
+
+  // Handle click on discovery history item
+  const handleDiscoveryHistoryClick = (item: DiscoveryHistoryItem) => {
+    console.log('[DiscoveryHistory] Clicked item:', item.id, item.query, 'traceId:', item.traceId);
+    // Switch to discover tab to show results
+    setActiveTab('discover');
+    if (item.traceId) {
+      loadDiscoveryFromTrace(item.traceId, item.query);
+    }
   };
 
   // Selection handlers for bulk messaging
@@ -1046,10 +1062,7 @@ function SearchPageContent() {
                   {discoveryHistory.slice(0, 10).map((item) => (
                     <button
                       key={item.id}
-                      onClick={() => {
-                        // TODO: Could load discovery results from trace
-                        console.log('[DiscoveryHistory] Clicked:', item.query);
-                      }}
+                      onClick={() => handleDiscoveryHistoryClick(item)}
                       className="w-full text-left p-2 rounded-lg hover:bg-slate-800 transition-colors group"
                     >
                       <p className="text-sm text-white truncate">{item.query}</p>

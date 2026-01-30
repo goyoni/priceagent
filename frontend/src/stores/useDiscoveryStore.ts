@@ -30,6 +30,7 @@ interface DiscoveryState {
   runDiscovery: (query: string) => Promise<string>;
   setSearchComplete: (products: DiscoveredProduct[]) => void;
   loadHistory: () => void;
+  loadFromTrace: (traceId: string, query: string) => Promise<void>;
 }
 
 export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
@@ -111,6 +112,58 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
     } else {
       set({
         products,
+        isSearching: false,
+        statusMessage: null,
+      });
+    }
+  },
+
+  // Load discovery results from a past trace
+  loadFromTrace: async (traceId: string, query: string) => {
+    set({
+      isSearching: true,
+      error: null,
+      products: [],
+      query,
+      currentTraceId: traceId,
+      statusMessage: 'Loading previous results...',
+    });
+
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+      const response = await fetch(`${apiUrl}/traces/${traceId}`);
+
+      if (!response.ok) {
+        throw new Error('Failed to load trace');
+      }
+
+      const data = await response.json();
+
+      // Parse discovery products from trace output
+      let products: DiscoveredProduct[] = [];
+      if (data.output) {
+        try {
+          // Try to parse as discovery results
+          const parsed = typeof data.output === 'string' ? JSON.parse(data.output) : data.output;
+          if (parsed.products && Array.isArray(parsed.products)) {
+            products = parsed.products;
+          } else if (Array.isArray(parsed)) {
+            products = parsed;
+          }
+        } catch {
+          console.log('[Discovery] Could not parse trace output as products');
+        }
+      }
+
+      set({
+        products,
+        isSearching: false,
+        statusMessage: null,
+      });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load';
+      set({
+        error: errorMessage,
         isSearching: false,
         statusMessage: null,
       });
