@@ -145,6 +145,33 @@ class ApiClient {
   async getCountry(): Promise<{ country: string; source: string }> {
     return this.fetch('/api/geo/country');
   }
+
+  /**
+   * Start a price search for shopping list items.
+   */
+  async startPriceSearch(
+    items: Array<{ product_name: string; model_number?: string }>,
+    country: string = 'IL'
+  ): Promise<{ session_id: string; trace_id: string; status: string }> {
+    return this.fetch('/api/shopping-list/search-prices', {
+      method: 'POST',
+      body: JSON.stringify({ items, country }),
+    });
+  }
+
+  /**
+   * Get the status of a price search session.
+   */
+  async getSearchStatus(sessionId: string): Promise<{
+    session_id: string;
+    status: string;
+    started_at: string;
+    completed_at?: string;
+    trace_id?: string;
+    error?: string;
+  }> {
+    return this.fetch(`/api/shopping-list/search-status/${sessionId}`);
+  }
 }
 
 // Export singleton instance

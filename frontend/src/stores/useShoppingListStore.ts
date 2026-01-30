@@ -4,12 +4,14 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { api } from '@/lib/api';
 import type { ShoppingListItem, PriceSearchSession } from '@/lib/types';
 
 interface ShoppingListState {
   // State
   items: ShoppingListItem[];
   isLoading: boolean;
+  isSearching: boolean;
 
   // Active price search session
   activeSearchSession: PriceSearchSession | null;
@@ -22,8 +24,10 @@ interface ShoppingListState {
   getItemById: (id: string) => ShoppingListItem | undefined;
   isDuplicate: (modelNumber: string) => boolean;
 
-  // Price search actions (to be implemented in Commit 5)
+  // Price search actions
   setActiveSearchSession: (session: PriceSearchSession | null) => void;
+  startPriceSearch: (country: string) => Promise<{ sessionId: string; traceId: string }>;
+  markSearchComplete: (status: 'completed' | 'failed', error?: string) => void;
 }
 
 export const useShoppingListStore = create<ShoppingListState>()(
@@ -32,6 +36,7 @@ export const useShoppingListStore = create<ShoppingListState>()(
       // Initial state
       items: [],
       isLoading: false,
+      isSearching: false,
       activeSearchSession: null,
 
       // Add a new item
@@ -86,6 +91,59 @@ export const useShoppingListStore = create<ShoppingListState>()(
       // Set active price search session
       setActiveSearchSession: (session) => {
         set({ activeSearchSession: session });
+      },
+
+      // Start a price search for all items
+      startPriceSearch: async (country) => {
+        const { items } = get();
+
+        if (items.length === 0) {
+          throw new Error('No items to search');
+        }
+
+        set({ isSearching: true });
+
+        try {
+          const searchItems = items.map((item) => ({
+            product_name: item.product_name,
+            model_number: item.model_number,
+          }));
+
+          const response = await api.startPriceSearch(searchItems, country);
+
+          const session: PriceSearchSession = {
+            id: response.session_id,
+            trace_id: response.trace_id,
+            status: 'running',
+            country,
+            started_at: new Date().toISOString(),
+          };
+
+          set({ activeSearchSession: session });
+
+          return {
+            sessionId: response.session_id,
+            traceId: response.trace_id,
+          };
+        } catch (error) {
+          set({ isSearching: false });
+          throw error;
+        }
+      },
+
+      // Mark search as complete
+      markSearchComplete: (status, error) => {
+        set((state) => ({
+          isSearching: false,
+          activeSearchSession: state.activeSearchSession
+            ? {
+                ...state.activeSearchSession,
+                status,
+                completed_at: new Date().toISOString(),
+                error,
+              }
+            : null,
+        }));
       },
     }),
     {

@@ -23,6 +23,7 @@ import { useDraftStore } from '@/stores/useDraftStore';
 import { DraftModal } from '@/components/drafts/DraftModal';
 import { ProductDiscoveryView } from '@/components/discovery/ProductDiscoveryView';
 import { ShoppingListView } from '@/components/shopping-list/ShoppingListView';
+import { PriceSearchNotification } from '@/components/shopping-list/PriceSearchNotification';
 import { useCountry } from '@/hooks/useCountry';
 import { useShoppingListStore } from '@/stores/useShoppingListStore';
 import type { ShoppingListItem } from '@/lib/types';
@@ -154,7 +155,12 @@ function SearchPageContent() {
   const { country, setCountry } = useCountry('IL');
 
   // Shopping list from store
-  const { items: shoppingList, addItem: addToShoppingList } = useShoppingListStore();
+  const {
+    items: shoppingList,
+    addItem: addToShoppingList,
+    activeSearchSession,
+    markSearchComplete,
+  } = useShoppingListStore();
 
   const [query, setQuery] = useState('');
   const [currentTraceId, setCurrentTraceId] = useState<string | null>(null);
@@ -187,6 +193,59 @@ function SearchPageContent() {
   useEffect(() => {
     setSearchHistory(getSearchHistory());
   }, []);
+
+  // Listen for price search trace completion via WebSocket
+  useEffect(() => {
+    if (!activeSearchSession?.trace_id || activeSearchSession.status !== 'running') {
+      return;
+    }
+
+    const traceId = activeSearchSession.trace_id;
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const wsUrl = apiUrl.replace('http://', 'ws://').replace('https://', 'wss://');
+
+    let ws: WebSocket | null = null;
+    let cleanup = () => {
+      if (ws) {
+        ws.close();
+        ws = null;
+      }
+    };
+
+    try {
+      ws = new WebSocket(`${wsUrl}/traces/ws`);
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.trace_id !== traceId) return;
+
+          if (data.event_type === 'trace_ended') {
+            console.log('[PriceSearch] Trace completed:', traceId);
+            if (data.data?.error) {
+              markSearchComplete('failed', data.data.error);
+            } else {
+              markSearchComplete('completed');
+            }
+            cleanup();
+          }
+        } catch {
+          // Ignore parse errors
+        }
+      };
+
+      ws.onerror = () => {
+        console.error('[PriceSearch] WebSocket error');
+        markSearchComplete('failed', 'Connection error');
+        cleanup();
+      };
+
+    } catch (err) {
+      console.error('[PriceSearch] Failed to connect WebSocket:', err);
+    }
+
+    return cleanup;
+  }, [activeSearchSession?.trace_id, activeSearchSession?.status, markSearchComplete]);
 
   // Load sellers for phone enrichment on mount
   useEffect(() => {
@@ -1344,7 +1403,10 @@ function SearchPageContent() {
       {/* Shopping List Tab Content */}
       {activeTab === 'shopping-list' && (
         <div className="max-w-4xl mx-auto px-4 py-8">
-          <ShoppingListView onSwitchToDiscover={() => setActiveTab('discover')} />
+          <ShoppingListView
+            onSwitchToDiscover={() => setActiveTab('discover')}
+            country={country}
+          />
         </div>
       )}
 
@@ -1413,6 +1475,13 @@ function SearchPageContent() {
 
       {/* Draft Modal for bulk messaging */}
       <DraftModal />
+
+      {/* Price Search Notification */}
+      <PriceSearchNotification
+        onViewResults={(traceId) => {
+          router.push(`/dashboard?trace=${traceId}`);
+        }}
+      />
     </div>
   );
 }

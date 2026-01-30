@@ -10,14 +10,16 @@ import { ShoppingListItem } from './ShoppingListItem';
 
 interface ShoppingListViewProps {
   onSwitchToDiscover: () => void;
+  country: string;
 }
 
-export function ShoppingListView({ onSwitchToDiscover }: ShoppingListViewProps) {
-  const { items, removeItem, clearList, addItem } = useShoppingListStore();
+export function ShoppingListView({ onSwitchToDiscover, country }: ShoppingListViewProps) {
+  const { items, removeItem, clearList, addItem, startPriceSearch, isSearching } = useShoppingListStore();
 
   const [isAddingManual, setIsAddingManual] = useState(false);
   const [manualProduct, setManualProduct] = useState('');
   const [manualModel, setManualModel] = useState('');
+  const [searchError, setSearchError] = useState<string | null>(null);
 
   const handleAddManual = useCallback((e: React.FormEvent) => {
     e.preventDefault();
@@ -39,6 +41,15 @@ export function ShoppingListView({ onSwitchToDiscover }: ShoppingListViewProps) 
       clearList();
     }
   }, [clearList]);
+
+  const handleStartSearch = useCallback(async () => {
+    setSearchError(null);
+    try {
+      await startPriceSearch(country);
+    } catch (err) {
+      setSearchError(err instanceof Error ? err.message : 'Failed to start search');
+    }
+  }, [startPriceSearch, country]);
 
   return (
     <div className="space-y-6">
@@ -171,25 +182,60 @@ export function ShoppingListView({ onSwitchToDiscover }: ShoppingListViewProps) 
             />
           ))}
 
-          {/* Price Search Button - placeholder for Commit 5 */}
+          {/* Price Search Button */}
           <div className="pt-4 border-t border-slate-700">
+            {searchError && (
+              <div className="mb-3 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
+                {searchError}
+              </div>
+            )}
             <button
-              disabled
-              className="w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-500
+              onClick={handleStartSearch}
+              disabled={isSearching}
+              className={`w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-500
                        text-white font-medium rounded-xl
-                       opacity-50 cursor-not-allowed flex items-center justify-center gap-2"
+                       flex items-center justify-center gap-2 transition-all
+                       ${isSearching ? 'opacity-75 cursor-wait' : 'hover:from-emerald-400 hover:to-teal-400'}`}
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                />
-              </svg>
-              Search Prices for All Items
-              <span className="text-xs opacity-75">(Coming soon)</span>
+              {isSearching ? (
+                <>
+                  <svg className="w-5 h-5 animate-spin" viewBox="0 0 24 24">
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                      fill="none"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                    />
+                  </svg>
+                  Searching prices...
+                </>
+              ) : (
+                <>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                  </svg>
+                  Search Prices for All Items
+                </>
+              )}
             </button>
+            <p className="text-center text-slate-500 text-xs mt-2">
+              {isSearching
+                ? 'You can continue browsing while we search'
+                : 'We\'ll search all your items at once and notify you when done'}
+            </p>
           </div>
         </div>
       )}
