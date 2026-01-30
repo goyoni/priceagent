@@ -9,7 +9,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { useDiscoveryStore } from '@/stores/useDiscoveryStore';
 import { DiscoveryResultsTable } from './DiscoveryResultsTable';
 import { CountrySelector } from '@/components/ui/CountrySelector';
-import type { DiscoveredProduct, ShoppingListItem } from '@/lib/types';
+import type { DiscoveredProduct, ShoppingListItem, DiscoveryResponse } from '@/lib/types';
 
 interface ProductDiscoveryViewProps {
   onAddToShoppingList: (item: Omit<ShoppingListItem, 'id' | 'added_at'>) => void;
@@ -18,49 +18,52 @@ interface ProductDiscoveryViewProps {
 }
 
 /**
- * Parse discovery products from agent output.
+ * Parse discovery response from agent output.
  */
-function parseDiscoveryProducts(output: string): DiscoveredProduct[] {
+function parseDiscoveryResponse(output: string): DiscoveryResponse {
   try {
     // Try to parse as JSON directly
     const parsed = JSON.parse(output);
 
+    // Extract products array with proper typing
+    const extractProducts = (items: unknown[]): DiscoveredProduct[] => {
+      return items.map((p: unknown, index: number): DiscoveredProduct => {
+        const item = p as Record<string, unknown>;
+        return {
+          id: String(item.id || `prod_${Date.now()}_${index}`),
+          name: String(item.name || 'Unknown Product'),
+          brand: item.brand ? String(item.brand) : undefined,
+          model_number: item.model_number ? String(item.model_number) : undefined,
+          category: String(item.category || 'product'),
+          key_specs: Array.isArray(item.key_specs) ? item.key_specs.map(String) : [],
+          price_range: item.price_range ? String(item.price_range) : undefined,
+          why_recommended: String(item.why_recommended || ''),
+          price: typeof item.price === 'number' ? item.price : undefined,
+          currency: item.currency ? String(item.currency) : undefined,
+          url: item.url ? String(item.url) : undefined,
+          rating: typeof item.rating === 'number' ? item.rating : undefined,
+        };
+      });
+    };
+
     if (parsed.products && Array.isArray(parsed.products)) {
-      return parsed.products.map((p: Record<string, unknown>, index: number): DiscoveredProduct => ({
-        id: String(p.id || `prod_${Date.now()}_${index}`),
-        name: String(p.name || 'Unknown Product'),
-        brand: p.brand ? String(p.brand) : undefined,
-        model_number: p.model_number ? String(p.model_number) : undefined,
-        category: String(p.category || 'product'),
-        key_specs: Array.isArray(p.key_specs) ? p.key_specs.map(String) : [],
-        price_range: p.price_range ? String(p.price_range) : undefined,
-        why_recommended: String(p.why_recommended || ''),
-        price: typeof p.price === 'number' ? p.price : undefined,
-        currency: p.currency ? String(p.currency) : undefined,
-        url: p.url ? String(p.url) : undefined,
-        rating: typeof p.rating === 'number' ? p.rating : undefined,
-      }));
+      return {
+        products: extractProducts(parsed.products),
+        search_summary: parsed.search_summary,
+        no_results_message: parsed.no_results_message,
+        suggestions: parsed.suggestions,
+        criteria_feedback: parsed.criteria_feedback,
+      };
     }
 
     if (Array.isArray(parsed)) {
-      return parsed.map((p: Record<string, unknown>, index: number): DiscoveredProduct => ({
-        id: String(p.id || `prod_${Date.now()}_${index}`),
-        name: String(p.name || 'Unknown Product'),
-        brand: p.brand ? String(p.brand) : undefined,
-        model_number: p.model_number ? String(p.model_number) : undefined,
-        category: String(p.category || 'product'),
-        key_specs: Array.isArray(p.key_specs) ? p.key_specs.map(String) : [],
-        price_range: p.price_range ? String(p.price_range) : undefined,
-        why_recommended: String(p.why_recommended || ''),
-        price: typeof p.price === 'number' ? p.price : undefined,
-        currency: p.currency ? String(p.currency) : undefined,
-        url: p.url ? String(p.url) : undefined,
-        rating: typeof p.rating === 'number' ? p.rating : undefined,
-      }));
+      return {
+        products: extractProducts(parsed),
+      };
     }
 
     console.log('[Discovery] Output is not a products array:', parsed);
-    return [];
+    return { products: [] };
   } catch (e) {
     // Try to extract JSON from markdown or mixed content
     const jsonMatch = output.match(/\{[\s\S]*"products"[\s\S]*\}/);
@@ -68,7 +71,7 @@ function parseDiscoveryProducts(output: string): DiscoveredProduct[] {
       try {
         const parsed = JSON.parse(jsonMatch[0]);
         if (parsed.products && Array.isArray(parsed.products)) {
-          return parseDiscoveryProducts(JSON.stringify(parsed));
+          return parseDiscoveryResponse(JSON.stringify(parsed));
         }
       } catch {
         console.log('[Discovery] Failed to extract JSON from output');
@@ -76,7 +79,7 @@ function parseDiscoveryProducts(output: string): DiscoveredProduct[] {
     }
 
     console.log('[Discovery] Failed to parse output as JSON:', e);
-    return [];
+    return { products: [] };
   }
 }
 
@@ -91,6 +94,10 @@ export function ProductDiscoveryView({
     isSearching,
     currentTraceId,
     products,
+    searchSummary,
+    noResultsMessage,
+    suggestions,
+    criteriaFeedback,
     error,
     statusMessage,
     setStatusMessage,
@@ -147,20 +154,20 @@ export function ProductDiscoveryView({
           if (data.data?.error) {
             console.error('[Discovery] Trace error:', data.data.error);
             setError(data.data.error);
-            setSearchComplete([]);
+            setSearchComplete({ products: [] });
           } else {
             const finalOutput = data.data?.final_output || '';
             console.log('[Discovery] Final output length:', finalOutput.length);
             console.log('[Discovery] Final output preview:', finalOutput.substring(0, 500));
 
-            const products = parseDiscoveryProducts(finalOutput);
-            console.log('[Discovery] Parsed products:', products.length);
+            const response = parseDiscoveryResponse(finalOutput);
+            console.log('[Discovery] Parsed products:', response.products.length);
 
-            if (products.length === 0 && finalOutput.length > 0) {
+            if (response.products.length === 0 && finalOutput.length > 0) {
               console.log('[Discovery] No products parsed, full output:', finalOutput);
             }
 
-            setSearchComplete(products);
+            setSearchComplete(response);
           }
 
           ws.close();
@@ -184,11 +191,11 @@ export function ProductDiscoveryView({
           .then((res) => res.json())
           .then((trace) => {
             if (trace.status === 'completed' && trace.final_output) {
-              const products = parseDiscoveryProducts(trace.final_output);
-              setSearchComplete(products);
+              const response = parseDiscoveryResponse(trace.final_output);
+              setSearchComplete(response);
             } else if (trace.status === 'error') {
               setError(trace.error || 'Discovery failed');
-              setSearchComplete([]);
+              setSearchComplete({ products: [] });
             }
           })
           .catch((err) => {
@@ -339,8 +346,78 @@ export function ProductDiscoveryView({
         )}
       </div>
 
-      {/* Suggestions (when no results) */}
-      {!isSearching && products.length === 0 && !error && (
+      {/* No results feedback (when search completed but no products found) */}
+      {!isSearching && products.length === 0 && !error && (noResultsMessage || criteriaFeedback.length > 0 || searchSummary) && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-6 space-y-4">
+          {/* No results message */}
+          {noResultsMessage && (
+            <div className="text-amber-400 font-medium">
+              {noResultsMessage}
+            </div>
+          )}
+
+          {/* Search summary - what was searched */}
+          {searchSummary && (
+            <div className="space-y-2">
+              <h3 className="text-slate-300 text-sm font-medium">What we searched for:</h3>
+              <div className="text-slate-400 text-sm">
+                <span className="text-cyan-400">&ldquo;{searchSummary.original_requirement}&rdquo;</span>
+                {searchSummary.category && (
+                  <span className="ml-2 text-slate-500">({searchSummary.category})</span>
+                )}
+              </div>
+              {searchSummary.search_attempts && searchSummary.search_attempts.length > 0 && (
+                <div className="mt-2">
+                  <span className="text-slate-500 text-xs">
+                    Searched {searchSummary.search_attempts.length} queries across{' '}
+                    {searchSummary.search_attempts.reduce((acc, a) => acc + (a.scrapers?.length || 0), 0)} sources
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Criteria that were used */}
+          {criteriaFeedback.length > 0 && (
+            <div className="space-y-2">
+              <h3 className="text-slate-300 text-sm font-medium">Search criteria used:</h3>
+              <ul className="text-slate-400 text-sm space-y-1">
+                {criteriaFeedback.map((criterion, idx) => (
+                  <li key={idx} className="flex items-start">
+                    <span className="text-cyan-400 mr-2">{criterion}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Suggestions */}
+          {suggestions.length > 0 && (
+            <div className="space-y-2">
+              <h3 className="text-slate-300 text-sm font-medium">Suggestions:</h3>
+              <ul className="text-slate-400 text-sm space-y-1">
+                {suggestions.map((suggestion, idx) => (
+                  <li key={idx} className="flex items-start">
+                    <span className="text-amber-400 mr-2">&#8226;</span>
+                    <span>{suggestion}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Clear button */}
+          <button
+            onClick={clearResults}
+            className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+          >
+            Clear and try again
+          </button>
+        </div>
+      )}
+
+      {/* Example suggestions (only when no search performed yet) */}
+      {!isSearching && products.length === 0 && !error && !noResultsMessage && !searchSummary && criteriaFeedback.length === 0 && (
         <div className="text-center">
           <p className="text-slate-500 text-sm mb-3">Or try one of these examples:</p>
           <div className="flex flex-wrap justify-center gap-2">
