@@ -7,6 +7,33 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { api } from '@/lib/api';
 import type { ShoppingListItem, PriceSearchSession } from '@/lib/types';
 
+const STORAGE_KEY = 'shoppingagent_shopping_list';
+const OLD_STORAGE_KEY = 'priceagent_shopping_list';
+
+/**
+ * Migrate data from old storage key to new one (one-time migration).
+ */
+function migrateFromOldKey(): void {
+  if (typeof window === 'undefined') return;
+
+  try {
+    const oldData = localStorage.getItem(OLD_STORAGE_KEY);
+    const newData = localStorage.getItem(STORAGE_KEY);
+
+    // Only migrate if old data exists and new data doesn't
+    if (oldData && !newData) {
+      console.log('[ShoppingList] Migrating from old storage key');
+      localStorage.setItem(STORAGE_KEY, oldData);
+      localStorage.removeItem(OLD_STORAGE_KEY);
+    }
+  } catch (error) {
+    console.error('[ShoppingList] Migration failed:', error);
+  }
+}
+
+// Run migration before store is created
+migrateFromOldKey();
+
 interface ShoppingListState {
   // State
   items: ShoppingListItem[];
@@ -147,7 +174,7 @@ export const useShoppingListStore = create<ShoppingListState>()(
       },
     }),
     {
-      name: 'shoppingagent_shopping_list',
+      name: STORAGE_KEY,
       storage: createJSONStorage(() => localStorage),
       // Only persist items, not loading state or active session
       partialize: (state) => ({ items: state.items }),

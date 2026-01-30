@@ -909,11 +909,28 @@ function SearchPageContent() {
       <aside className="fixed top-0 left-0 h-full w-64 bg-slate-900 border-r border-slate-700 flex flex-col z-40">
         {/* Sidebar Header - Logo and Brand */}
         <div className="p-4 border-b border-slate-700">
-          {/* App Logo */}
+          {/* App Logo - matches favicon design */}
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+            <div className="w-10 h-10 flex items-center justify-center">
+              <svg className="w-10 h-10" viewBox="0 0 64 64" fill="none">
+                {/* Shopping bag body */}
+                <path d="M12 20 L8 58 C8 60 10 62 12 62 L52 62 C54 62 56 60 56 58 L52 20 Z"
+                      fill="#6366f1" stroke="#4f46e5" strokeWidth="2"/>
+                {/* Bag handles */}
+                <path d="M22 20 C22 12 26 6 32 6 C38 6 42 12 42 20"
+                      fill="none" stroke="#4f46e5" strokeWidth="3" strokeLinecap="round"/>
+                {/* Left eye */}
+                <circle cx="24" cy="36" r="5" fill="#22d3ee"/>
+                <circle cx="24" cy="36" r="2" fill="#0e7490"/>
+                {/* Right eye */}
+                <circle cx="40" cy="36" r="5" fill="#22d3ee"/>
+                <circle cx="40" cy="36" r="2" fill="#0e7490"/>
+                {/* Smiling mouth */}
+                <path d="M24 46 Q32 54 40 46"
+                      fill="none" stroke="#22d3ee" strokeWidth="2.5" strokeLinecap="round"/>
+                {/* Antenna */}
+                <circle cx="32" cy="4" r="3" fill="#22d3ee"/>
+                <line x1="32" y1="6" x2="32" y2="12" stroke="#22d3ee" strokeWidth="2"/>
               </svg>
             </div>
             <div>

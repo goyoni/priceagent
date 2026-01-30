@@ -19,7 +19,32 @@ export interface SearchHistoryItem {
 }
 
 const STORAGE_KEY = 'shoppingagent_search_history';
+const OLD_STORAGE_KEY = 'priceagent_search_history';
 const MAX_HISTORY_ITEMS = 50;
+
+/**
+ * Migrate data from old storage key to new one (one-time migration).
+ */
+function migrateFromOldKey(): void {
+  if (typeof window === 'undefined') return;
+
+  try {
+    const oldData = localStorage.getItem(OLD_STORAGE_KEY);
+    const newData = localStorage.getItem(STORAGE_KEY);
+
+    // Only migrate if old data exists and new data doesn't
+    if (oldData && !newData) {
+      console.log('[SearchHistory] Migrating from old storage key');
+      localStorage.setItem(STORAGE_KEY, oldData);
+      localStorage.removeItem(OLD_STORAGE_KEY);
+    }
+  } catch (error) {
+    console.error('[SearchHistory] Migration failed:', error);
+  }
+}
+
+// Run migration on module load
+migrateFromOldKey();
 
 /**
  * Get all search history items, sorted by most recent first.
