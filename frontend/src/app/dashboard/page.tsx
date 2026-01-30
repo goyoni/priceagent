@@ -4,7 +4,7 @@
 
 'use client';
 
-import { useEffect } from 'react';
+import { Suspense } from 'react';
 import { Header } from '@/components/layout/Header';
 import { TraceList } from '@/components/traces/TraceList';
 import { TraceDetail } from '@/components/traces/TraceDetail';
@@ -34,7 +34,9 @@ export default function Dashboard() {
               <h2 className="font-medium">Recent Traces</h2>
             </div>
             <div className="flex-1 overflow-y-auto">
-              <TraceList />
+              <Suspense fallback={<div className="p-4 text-center text-secondary">Loading...</div>}>
+                <TraceList />
+              </Suspense>
             </div>
           </aside>
 
