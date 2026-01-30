@@ -20,8 +20,19 @@ class TestNormalizeSellerName:
 
     def test_hebrew_zap_normalizes_to_zap(self):
         """Hebrew Zap store names should normalize to 'zap'."""
-        assert normalize_seller_name("רכישה בזאפ") == "zap"
+        # Only actual Zap-owned stores, not the marketplace section
         assert normalize_seller_name("זאפ") == "zap"
+        assert normalize_seller_name("Zap ישיר") == "zap"
+
+    def test_marketplace_section_not_zap(self):
+        """רכישה בזאפ is a marketplace, sellers there are third-party."""
+        # When seller is listed under רכישה בזאפ, use actual seller name
+        result = normalize_seller_name(
+            "x-press",  # Actual seller shown under רכישה בזאפ
+            url="https://shop.zap.co.il/product-model?offerid=123"
+        )
+        assert result == "xpress"
+        assert result != "zap"
 
     def test_zap_co_il_normalizes_to_zap(self):
         """Zap.co.il as seller name should normalize to 'zap'."""
@@ -102,11 +113,15 @@ class TestZapStoreNames:
         """Should contain all common Zap store name variants."""
         assert "zap" in ZAP_STORE_NAMES
         assert "zapstore" in ZAP_STORE_NAMES
-        assert "zap.co.il" in ZAP_STORE_NAMES
-        assert "רכישה בזאפ" in ZAP_STORE_NAMES
+        assert "zap direct" in ZAP_STORE_NAMES
 
     def test_does_not_contain_third_parties(self):
         """Should NOT contain third-party seller names."""
         assert "superelectric" not in ZAP_STORE_NAMES
         assert "x-press" not in ZAP_STORE_NAMES
         assert "bug" not in ZAP_STORE_NAMES
+
+    def test_does_not_contain_marketplace_section(self):
+        """רכישה בזאפ is a marketplace section, not Zap's own store."""
+        # Third-party sellers list under רכישה בזאפ, so it's not a Zap store name
+        assert "רכישה בזאפ" not in ZAP_STORE_NAMES

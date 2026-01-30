@@ -48,14 +48,14 @@ SELLER_ALIASES = {
 }
 
 # Zap-owned store names - these should aggregate under "zap"
+# Note: "רכישה בזאפ" is a marketplace section with third-party sellers, NOT Zap's own store
 ZAP_STORE_NAMES = {
     "zap",
     "zapstore",
     "zap store",
-    "zap.co.il",
-    "רכישה בזאפ",
     "zap direct",
     "זאפ",
+    "zap ישיר",
 }
 
 # Reverse mapping from canonical name to domain (for site-search)
