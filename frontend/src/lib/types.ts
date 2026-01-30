@@ -160,6 +160,48 @@ export interface DiscoveredProduct {
   currency?: string;
   url?: string;
   rating?: number;
+  match_score?: 'high' | 'medium' | 'low' | 'unknown';
+  criteria_match?: {
+    matched?: string[];
+    unknown?: string[];
+    unmet?: string[];
+  };
+}
+
+export interface DiscoveryCriterion {
+  attribute: string;
+  value: string;
+  source?: string;
+  confidence?: 'high' | 'medium' | 'low';
+  explanation?: string;
+}
+
+export interface DiscoverySearchAttempt {
+  query: string;
+  strategy: 'specific_model' | 'local_language' | 'category';
+  results: number;
+  scrapers?: Array<{ name: string; count: number }>;
+}
+
+export interface DiscoverySearchSummary {
+  original_requirement: string;
+  category: string;
+  country: string;
+  criteria_used: DiscoveryCriterion[];
+  recommended_models_searched?: string[];
+  search_attempts: DiscoverySearchAttempt[];
+  total_products_found: number;
+  research_quality?: 'good' | 'moderate' | 'limited' | 'unknown';
+  notes?: string;
+  error?: string;
+}
+
+export interface DiscoveryResponse {
+  products: DiscoveredProduct[];
+  search_summary?: DiscoverySearchSummary;
+  no_results_message?: string;
+  suggestions?: string[];
+  criteria_feedback?: string[];
 }
 
 // Shopping List types
