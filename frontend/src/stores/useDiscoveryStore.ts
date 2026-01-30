@@ -5,6 +5,11 @@
 import { create } from 'zustand';
 import { api } from '@/lib/api';
 import type { DiscoveredProduct } from '@/lib/types';
+import {
+  DiscoveryHistoryItem,
+  getDiscoveryHistory,
+  addToDiscoveryHistory,
+} from '@/lib/discoveryHistory';
 
 interface DiscoveryState {
   // State
@@ -14,6 +19,7 @@ interface DiscoveryState {
   products: DiscoveredProduct[];
   error: string | null;
   statusMessage: string | null;
+  history: DiscoveryHistoryItem[];
 
   // Actions
   setQuery: (query: string) => void;
@@ -23,6 +29,7 @@ interface DiscoveryState {
   clearResults: () => void;
   runDiscovery: (query: string) => Promise<string>;
   setSearchComplete: (products: DiscoveredProduct[]) => void;
+  loadHistory: () => void;
 }
 
 export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
@@ -33,6 +40,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
   products: [],
   error: null,
   statusMessage: null,
+  history: [],
 
   // Sync actions
   setQuery: (query) => set({ query }),
@@ -46,6 +54,12 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
     statusMessage: null,
     currentTraceId: null,
   }),
+
+  // Load history from localStorage
+  loadHistory: () => {
+    const history = getDiscoveryHistory();
+    set({ history });
+  },
 
   // Start a discovery search
   runDiscovery: async (query) => {
@@ -76,9 +90,30 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
   },
 
   // Called when WebSocket receives results
-  setSearchComplete: (products) => set({
-    products,
-    isSearching: false,
-    statusMessage: null,
-  }),
+  setSearchComplete: (products) => {
+    const { query, currentTraceId } = get();
+
+    // Add to history if we have products
+    if (products.length > 0 && query) {
+      const historyItem = addToDiscoveryHistory({
+        query,
+        timestamp: Date.now(),
+        productCount: products.length,
+        traceId: currentTraceId || undefined,
+      });
+
+      set((state) => ({
+        products,
+        isSearching: false,
+        statusMessage: null,
+        history: [historyItem, ...state.history.slice(0, 49)],
+      }));
+    } else {
+      set({
+        products,
+        isSearching: false,
+        statusMessage: null,
+      });
+    }
+  },
 }));

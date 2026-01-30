@@ -26,6 +26,7 @@ import { ShoppingListView } from '@/components/shopping-list/ShoppingListView';
 import { PriceSearchNotification } from '@/components/shopping-list/PriceSearchNotification';
 import { useCountry } from '@/hooks/useCountry';
 import { useShoppingListStore } from '@/stores/useShoppingListStore';
+import { useDiscoveryStore } from '@/stores/useDiscoveryStore';
 import type { ShoppingListItem } from '@/lib/types';
 
 // Tab types for the landing page
@@ -162,6 +163,12 @@ function SearchPageContent() {
     markSearchComplete,
   } = useShoppingListStore();
 
+  // Discovery history from store
+  const {
+    history: discoveryHistory,
+    loadHistory: loadDiscoveryHistory,
+  } = useDiscoveryStore();
+
   const [query, setQuery] = useState('');
   const [currentTraceId, setCurrentTraceId] = useState<string | null>(null);
   const [isSearching, setIsSearching] = useState(false);
@@ -191,7 +198,8 @@ function SearchPageContent() {
   // Load localStorage history on mount
   useEffect(() => {
     setSearchHistory(getSearchHistory());
-  }, []);
+    loadDiscoveryHistory();
+  }, [loadDiscoveryHistory]);
 
   // Listen for price search trace completion via WebSocket
   useEffect(() => {
@@ -1008,13 +1016,39 @@ function SearchPageContent() {
                 </div>
               )
             ) : activeTab === 'discover' ? (
-              // Discovery History (placeholder - will be implemented in commit 2)
-              <div className="text-center text-slate-500 py-4">
-                <svg className="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-                <p className="text-xs">No discovery history</p>
-              </div>
+              // Discovery History
+              discoveryHistory.length === 0 ? (
+                <div className="text-center text-slate-500 py-4">
+                  <svg className="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <p className="text-xs">No discovery history</p>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {discoveryHistory.slice(0, 10).map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        // TODO: Could load discovery results from trace
+                        console.log('[DiscoveryHistory] Clicked:', item.query);
+                      }}
+                      className="w-full text-left p-2 rounded-lg hover:bg-slate-800 transition-colors group"
+                    >
+                      <p className="text-sm text-white truncate">{item.query}</p>
+                      <div className="flex items-center gap-2 text-xs text-slate-500">
+                        <span>{formatRelativeTime(item.timestamp)}</span>
+                        {item.productCount > 0 && (
+                          <>
+                            <span>-</span>
+                            <span>{item.productCount} products</span>
+                          </>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )
             ) : (
               // Shopping List - show recent price searches
               searchHistory.length === 0 ? (
@@ -1391,6 +1425,7 @@ function SearchPageContent() {
         <div className="max-w-4xl mx-auto">
           <ShoppingListView
             onSwitchToDiscover={() => setActiveTab('discover')}
+            onSearchStarted={() => setActiveTab('search')}
             country={country}
           />
         </div>

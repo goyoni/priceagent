@@ -147,7 +147,7 @@ export const useShoppingListStore = create<ShoppingListState>()(
       },
     }),
     {
-      name: 'priceagent_shopping_list',
+      name: 'shoppingagent_shopping_list',
       storage: createJSONStorage(() => localStorage),
       // Only persist items, not loading state or active session
       partialize: (state) => ({ items: state.items }),

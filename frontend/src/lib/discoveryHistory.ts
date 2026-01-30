@@ -1,0 +1,93 @@
+/**
+ * Discovery history management using localStorage.
+ * Stores user's product discovery searches separately from price searches.
+ */
+
+export interface DiscoveryHistoryItem {
+  id: string;
+  query: string;
+  timestamp: number;
+  productCount: number;
+  traceId?: string;
+}
+
+const STORAGE_KEY = 'shoppingagent_discovery_history';
+const MAX_HISTORY_ITEMS = 50;
+
+/**
+ * Get all discovery history items, sorted by most recent first.
+ */
+export function getDiscoveryHistory(): DiscoveryHistoryItem[] {
+  if (typeof window === 'undefined') return [];
+
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (!stored) return [];
+
+    const items = JSON.parse(stored) as DiscoveryHistoryItem[];
+    // Sort by timestamp descending (most recent first)
+    return items.sort((a, b) => b.timestamp - a.timestamp);
+  } catch (error) {
+    console.error('[DiscoveryHistory] Failed to load:', error);
+    return [];
+  }
+}
+
+/**
+ * Add a new discovery to history.
+ */
+export function addToDiscoveryHistory(item: Omit<DiscoveryHistoryItem, 'id'>): DiscoveryHistoryItem {
+  const history = getDiscoveryHistory();
+
+  const newItem: DiscoveryHistoryItem = {
+    ...item,
+    id: `discovery_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+  };
+
+  // Add to beginning of array
+  history.unshift(newItem);
+
+  // Limit to max items
+  const trimmed = history.slice(0, MAX_HISTORY_ITEMS);
+
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+  } catch (error) {
+    console.error('[DiscoveryHistory] Failed to save:', error);
+  }
+
+  return newItem;
+}
+
+/**
+ * Get a specific discovery by ID.
+ */
+export function getDiscoveryById(id: string): DiscoveryHistoryItem | undefined {
+  const history = getDiscoveryHistory();
+  return history.find(item => item.id === id);
+}
+
+/**
+ * Delete a discovery from history.
+ */
+export function deleteFromDiscoveryHistory(id: string): void {
+  const history = getDiscoveryHistory();
+  const filtered = history.filter(item => item.id !== id);
+
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+  } catch (error) {
+    console.error('[DiscoveryHistory] Failed to delete:', error);
+  }
+}
+
+/**
+ * Clear all discovery history.
+ */
+export function clearDiscoveryHistory(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch (error) {
+    console.error('[DiscoveryHistory] Failed to clear:', error);
+  }
+}

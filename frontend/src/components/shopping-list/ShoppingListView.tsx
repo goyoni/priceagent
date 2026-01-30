@@ -10,10 +10,11 @@ import { ShoppingListItem } from './ShoppingListItem';
 
 interface ShoppingListViewProps {
   onSwitchToDiscover: () => void;
+  onSearchStarted?: () => void;
   country: string;
 }
 
-export function ShoppingListView({ onSwitchToDiscover, country }: ShoppingListViewProps) {
+export function ShoppingListView({ onSwitchToDiscover, onSearchStarted, country }: ShoppingListViewProps) {
   const { items, removeItem, clearList, addItem, startPriceSearch, isSearching } = useShoppingListStore();
 
   const [isAddingManual, setIsAddingManual] = useState(false);
@@ -46,10 +47,12 @@ export function ShoppingListView({ onSwitchToDiscover, country }: ShoppingListVi
     setSearchError(null);
     try {
       await startPriceSearch(country);
+      // Notify parent that search started (for navigation)
+      onSearchStarted?.();
     } catch (err) {
       setSearchError(err instanceof Error ? err.message : 'Failed to start search');
     }
-  }, [startPriceSearch, country]);
+  }, [startPriceSearch, country, onSearchStarted]);
 
   return (
     <div className="space-y-6">
