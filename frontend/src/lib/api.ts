@@ -126,6 +126,25 @@ class ApiClient {
     }> }>('/api/sellers/');
     return data.sellers;
   }
+
+  /**
+   * Run a product discovery query.
+   */
+  async runDiscovery(
+    query: string
+  ): Promise<{ trace_id: string; status: string }> {
+    return this.fetch('/agent/run', {
+      method: 'POST',
+      body: JSON.stringify({ query, agent: 'discovery' }),
+    });
+  }
+
+  /**
+   * Get country from IP detection.
+   */
+  async getCountry(): Promise<{ country: string; source: string }> {
+    return this.fetch('/api/geo/country');
+  }
 }
 
 // Export singleton instance

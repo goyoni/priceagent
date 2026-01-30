@@ -144,3 +144,40 @@ export interface GenerateDraftsResponse {
 }
 
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected';
+
+// Product Discovery types
+export interface DiscoveredProduct {
+  id: string;
+  name: string;
+  brand?: string;
+  model_number?: string;
+  category: string;
+  key_specs: string[];
+  price_range?: string;
+  why_recommended: string;
+  // Additional fields from search results
+  price?: number;
+  currency?: string;
+  url?: string;
+  rating?: number;
+}
+
+// Shopping List types
+export interface ShoppingListItem {
+  id: string;
+  product_name: string;
+  model_number?: string;
+  specs_summary?: string;
+  source: 'manual' | 'discovery';
+  added_at: string;
+}
+
+export interface PriceSearchSession {
+  id: string;
+  trace_id?: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  country: string;
+  started_at: string;
+  completed_at?: string;
+  error?: string;
+}
