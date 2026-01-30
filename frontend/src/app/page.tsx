@@ -126,7 +126,7 @@ function SearchPageLoading() {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
       <div className="text-center">
         <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 via-cyan-400 to-teal-400 bg-clip-text text-transparent">
-          PriceAgent
+          Shopping Agent
         </h1>
         <p className="text-slate-400 mt-4 animate-pulse">Loading...</p>
       </div>
@@ -148,8 +148,8 @@ function SearchPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // Tab state
-  const [activeTab, setActiveTab] = useState<PageTab>('search');
+  // Tab state - default to 'discover' (Find Products)
+  const [activeTab, setActiveTab] = useState<PageTab>('discover');
 
   // Country detection
   const { country, setCountry } = useCountry('IL');
@@ -175,8 +175,7 @@ function SearchPageContent() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [rawResultText, setRawResultText] = useState<string | null>(null);
 
-  // Sidebar state - now fetched from server
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  // History state
   const [recentTraces, setRecentTraces] = useState<ServerTrace[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [searchHistory, setSearchHistory] = useState<SearchHistoryItem[]>([]);
@@ -389,12 +388,10 @@ function SearchPageContent() {
     }
   };
 
-  // Fetch history when sidebar opens
+  // Fetch recent traces on mount
   useEffect(() => {
-    if (sidebarOpen) {
-      fetchRecentTraces();
-    }
-  }, [sidebarOpen]);
+    fetchRecentTraces();
+  }, []);
 
   // Load trace from URL parameter on mount
   useEffect(() => {
@@ -824,7 +821,6 @@ function SearchPageContent() {
 
   const handleHistoryClick = (trace: ServerTrace) => {
     console.log('[History] Clicked trace:', trace.id, trace.input_prompt);
-    setSidebarOpen(false);
     updateUrlWithTrace(trace.id);
     loadTraceResults(trace.id);
   };
@@ -850,11 +846,6 @@ function SearchPageContent() {
         setRecentTraces(prev => prev.filter(t => t.id !== id));
       })
       .catch(err => console.error('[History] Delete failed:', err));
-  };
-
-  const handleClearHistory = () => {
-    // For now, just close sidebar - clearing all traces would need confirmation
-    alert('To clear history, delete individual items or clear from dashboard');
   };
 
   // Selection handlers for bulk messaging
@@ -905,180 +896,172 @@ function SearchPageContent() {
   }, [addToShoppingList]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      {/* History Toggle Button */}
-      <button
-        onClick={() => setSidebarOpen(!sidebarOpen)}
-        className="fixed top-4 left-4 z-50 p-2 bg-slate-800/80 border border-slate-700 rounded-lg
-                   text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
-        title="Search history"
-      >
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        {recentTraces.length > 0 && (
-          <span className="absolute -top-1 -right-1 w-5 h-5 bg-cyan-500 text-white text-xs
-                          rounded-full flex items-center justify-center">
-            {recentTraces.length > 9 ? '9+' : recentTraces.length}
-          </span>
-        )}
-      </button>
-
-      {/* Sidebar Overlay */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-40"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      {/* Sidebar */}
-      <div className={`fixed top-0 left-0 h-full w-80 bg-slate-900 border-r border-slate-700 z-50
-                      transform transition-transform duration-300
-                      ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="flex flex-col h-full">
-          {/* Sidebar Header */}
-          <div className="flex items-center justify-between p-4 border-b border-slate-700">
-            <h2 className="text-lg font-semibold text-white">Search History</h2>
-            <button
-              onClick={() => setSidebarOpen(false)}
-              className="p-1 text-slate-400 hover:text-white transition-colors"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex">
+      {/* Fixed Left Sidebar */}
+      <aside className="fixed top-0 left-0 h-full w-64 bg-slate-900 border-r border-slate-700 flex flex-col z-40">
+        {/* Sidebar Header - Logo and Brand */}
+        <div className="p-4 border-b border-slate-700">
+          {/* App Logo */}
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
+              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
-            </button>
+            </div>
+            <div>
+              <h1 className="text-lg font-bold bg-gradient-to-r from-blue-400 via-cyan-400 to-teal-400 bg-clip-text text-transparent">
+                Shopping Agent
+              </h1>
+            </div>
           </div>
+          {/* Claude Badge */}
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+            </svg>
+            <span>Built with Claude</span>
+          </div>
+        </div>
 
-          {/* Sidebar Content */}
-          <div className="flex-1 overflow-y-auto">
+        {/* Tab Navigation */}
+        <nav className="p-3 space-y-1 border-b border-slate-700">
+          <button
+            onClick={() => setActiveTab('discover')}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-left ${
+              activeTab === 'discover'
+                ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <span className="font-medium">Find Products</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('search')}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-left ${
+              activeTab === 'search'
+                ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className="font-medium">Price Search</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('shopping-list')}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-left ${
+              activeTab === 'shopping-list'
+                ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+            </svg>
+            <span className="font-medium">Shopping List</span>
+            {shoppingList.length > 0 && (
+              <span className={`ml-auto w-5 h-5 text-xs flex items-center justify-center rounded-full ${
+                activeTab === 'shopping-list' ? 'bg-cyan-500/30' : 'bg-cyan-500/20 text-cyan-400'
+              }`}>
+                {shoppingList.length}
+              </span>
+            )}
+          </button>
+        </nav>
+
+        {/* History Section - context dependent */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="p-3">
+            <h3 className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">
+              {activeTab === 'discover' ? 'Discovery History' : activeTab === 'search' ? 'Search History' : 'Recent Searches'}
+            </h3>
+
             {isLoadingHistory ? (
-              <div className="p-4 text-center text-slate-500">
-                <p className="animate-pulse">Loading history...</p>
+              <div className="text-center text-slate-500 py-4">
+                <p className="animate-pulse text-sm">Loading...</p>
               </div>
-            ) : recentTraces.length === 0 ? (
-              <div className="p-4 text-center text-slate-500">
-                <svg className="w-12 h-12 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            ) : activeTab === 'search' ? (
+              // Price Search History
+              searchHistory.length === 0 ? (
+                <div className="text-center text-slate-500 py-4">
+                  <svg className="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="text-xs">No search history</p>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {searchHistory.slice(0, 10).map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => handleLocalHistoryClick(item)}
+                      className="w-full text-left p-2 rounded-lg hover:bg-slate-800 transition-colors group"
+                    >
+                      <p className="text-sm text-white truncate">{item.query}</p>
+                      <p className="text-xs text-slate-500">{formatRelativeTime(item.timestamp)}</p>
+                    </button>
+                  ))}
+                </div>
+              )
+            ) : activeTab === 'discover' ? (
+              // Discovery History (placeholder - will be implemented in commit 2)
+              <div className="text-center text-slate-500 py-4">
+                <svg className="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
-                <p>No search history yet</p>
-                <p className="text-sm mt-1">Your searches will appear here</p>
+                <p className="text-xs">No discovery history</p>
               </div>
             ) : (
-              <div className="divide-y divide-slate-800">
-                {recentTraces.map((trace) => (
-                  <div
-                    key={trace.id}
-                    onClick={() => handleHistoryClick(trace)}
-                    className="p-3 hover:bg-slate-800/50 cursor-pointer transition-colors group"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-white font-medium truncate">
-                          {trace.input_prompt.replace('Search for: ', '')}
-                        </p>
-                        <div className="flex items-center gap-2 mt-1 text-xs text-slate-500">
-                          <span>{formatTimeAgo(trace.started_at)}</span>
-                          {trace.total_duration_ms && (
-                            <>
-                              <span>•</span>
-                              <span>{(trace.total_duration_ms / 1000).toFixed(1)}s</span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                      <button
-                        onClick={(e) => handleDeleteHistory(trace.id, e)}
-                        className="p-1 text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                        title="Delete"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              // Shopping List - show recent price searches
+              searchHistory.length === 0 ? (
+                <div className="text-center text-slate-500 py-4">
+                  <svg className="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="text-xs">No recent price searches</p>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {searchHistory.slice(0, 5).map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => handleLocalHistoryClick(item)}
+                      className="w-full text-left p-2 rounded-lg hover:bg-slate-800 transition-colors group"
+                    >
+                      <p className="text-sm text-white truncate">{item.query}</p>
+                      <p className="text-xs text-slate-500">{formatRelativeTime(item.timestamp)}</p>
+                    </button>
+                  ))}
+                </div>
+              )
             )}
           </div>
-
-          {/* Sidebar Footer */}
-          {recentTraces.length > 0 && (
-            <div className="p-3 border-t border-slate-700">
-              <button
-                onClick={handleClearHistory}
-                className="w-full py-2 text-sm text-slate-500 hover:text-red-400 transition-colors"
-              >
-                Clear all history
-              </button>
-            </div>
-          )}
         </div>
-      </div>
 
-      {/* Hero Section */}
-      <div className={`transition-all duration-500 ${(results.length > 0 || rawResultText || activeTab !== 'search') ? 'pt-8' : 'pt-32'}`}>
-        <div className="max-w-4xl mx-auto px-4">
-          {/* Logo/Brand */}
-          <div className={`text-center mb-8 transition-all duration-500 ${(results.length > 0 || rawResultText || activeTab !== 'search') ? 'scale-75' : ''}`}>
-            <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-blue-400 via-cyan-400 to-teal-400 bg-clip-text text-transparent">
-              PriceAgent
-            </h1>
-            <p className={`text-slate-400 mt-2 transition-opacity duration-300 ${(results.length > 0 || rawResultText || activeTab !== 'search') ? 'opacity-0 h-0' : 'opacity-100'}`}>
-              Find the best prices. Contact sellers directly.
-            </p>
-          </div>
+        {/* Sidebar Footer */}
+        <div className="p-3 border-t border-slate-700">
+          <a
+            href="/dashboard"
+            className="flex items-center gap-2 px-3 py-2 text-sm text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+            Dashboard
+          </a>
+        </div>
+      </aside>
 
-          {/* Tab Navigation */}
-          <div className="flex justify-center mb-6">
-            <div className="inline-flex bg-slate-800/50 border border-slate-700 rounded-xl p-1">
-              <button
-                onClick={() => setActiveTab('search')}
-                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                  activeTab === 'search'
-                    ? 'bg-cyan-500 text-white'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                Price Search
-              </button>
-              <button
-                onClick={() => setActiveTab('discover')}
-                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                  activeTab === 'discover'
-                    ? 'bg-cyan-500 text-white'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                Find Products
-              </button>
-              <button
-                onClick={() => setActiveTab('shopping-list')}
-                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-1 ${
-                  activeTab === 'shopping-list'
-                    ? 'bg-cyan-500 text-white'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                Shopping List
-                {shoppingList.length > 0 && (
-                  <span className={`w-5 h-5 text-xs flex items-center justify-center rounded-full ${
-                    activeTab === 'shopping-list' ? 'bg-white/20' : 'bg-cyan-500/30 text-cyan-400'
-                  }`}>
-                    {shoppingList.length}
-                  </span>
-                )}
-              </button>
-            </div>
-          </div>
-
-          {/* Tab Content */}
-          {activeTab === 'search' && (
-            <>
+      {/* Main Content Area */}
+      <main className="flex-1 ml-64 min-h-screen">
+        {/* Price Search Tab */}
+        {activeTab === 'search' && (
+          <div className="p-8">
+            <div className="max-w-4xl mx-auto">
               {/* Search Form */}
               <form onSubmit={handleSearch} className="relative">
             <div className="relative group">
@@ -1178,14 +1161,10 @@ function SearchPageContent() {
               </div>
             </div>
           )}
-            </>
-          )}
-        </div>
-      </div>
 
-      {/* Results Section - only show when search tab is active */}
-      {activeTab === 'search' && (results.length > 0 || error || (rawResultText && !isSearching)) && (
-        <div className="max-w-4xl mx-auto px-4 py-8">
+          {/* Results Section */}
+          {(results.length > 0 || error || (rawResultText && !isSearching)) && (
+            <div className="mt-8">
           {error ? (
             <div className="text-center py-12">
               <div className="text-red-400 text-lg">{error}</div>
@@ -1386,30 +1365,38 @@ function SearchPageContent() {
                 Results displayed in raw format. View the dashboard for structured data.
               </p>
             </div>
-          ) : null}
+              ) : null}
+            </div>
+          )}
         </div>
-      )}
+      </div>
+    )}
 
-      {/* Discover Tab Content */}
-      {activeTab === 'discover' && (
-        <div className="max-w-4xl mx-auto px-4 py-8">
+    {/* Discover Tab Content */}
+    {activeTab === 'discover' && (
+      <div className="p-8">
+        <div className="max-w-4xl mx-auto">
           <ProductDiscoveryView
             onAddToShoppingList={handleAddToShoppingList}
             country={country}
             onCountryChange={setCountry}
           />
         </div>
-      )}
+      </div>
+    )}
 
-      {/* Shopping List Tab Content */}
-      {activeTab === 'shopping-list' && (
-        <div className="max-w-4xl mx-auto px-4 py-8">
+    {/* Shopping List Tab Content */}
+    {activeTab === 'shopping-list' && (
+      <div className="p-8">
+        <div className="max-w-4xl mx-auto">
           <ShoppingListView
             onSwitchToDiscover={() => setActiveTab('discover')}
             country={country}
           />
         </div>
-      )}
+      </div>
+    )}
+  </main>
 
       {/* Floating Bulk Action Bar */}
       {selectedSellers.length > 0 && (
@@ -1465,13 +1452,9 @@ function SearchPageContent() {
         </div>
       )}
 
-      {/* Footer */}
-      <footer className="fixed bottom-0 left-0 right-0 py-4 text-center text-sm text-slate-600">
-        <a href="/dashboard" className="hover:text-slate-400 transition-colors">
-          Dashboard
-        </a>
-        <span className="mx-2">•</span>
-        <span>Powered by AI</span>
+      {/* Footer - Subtle branding */}
+      <footer className="fixed bottom-0 left-64 right-0 py-3 text-center text-xs text-slate-600">
+        <span>Powered by Claude AI</span>
       </footer>
 
       {/* Draft Modal for bulk messaging */}
