@@ -34,6 +34,7 @@ export function TraceItem({ trace, isSelected, onClick, onDelete }: TraceItemPro
 
   return (
     <div
+      data-testid="trace-item"
       className={cn(
         'p-3 rounded-lg cursor-pointer transition-colors relative group',
         'hover:bg-surface-hover',

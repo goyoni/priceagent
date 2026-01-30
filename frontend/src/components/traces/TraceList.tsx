@@ -5,10 +5,14 @@
 'use client';
 
 import { useEffect } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useTraceStore } from '@/stores/useTraceStore';
 import { TraceItem } from './TraceItem';
 
 export function TraceList() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   const {
     traces,
     selectedTraceId,
@@ -21,6 +25,23 @@ export function TraceList() {
   } = useTraceStore();
 
   const hasRunningTraces = (traces || []).some(t => t.status === 'running');
+
+  // Handle trace selection with URL update
+  const handleSelectTrace = (traceId: string) => {
+    selectTrace(traceId);
+    // Update URL
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('trace', traceId);
+    router.push(`/dashboard?${params.toString()}`, { scroll: false });
+  };
+
+  // Read trace from URL on mount
+  useEffect(() => {
+    const traceId = searchParams.get('trace');
+    if (traceId && traceId !== selectedTraceId) {
+      selectTrace(traceId);
+    }
+  }, [searchParams, selectTrace, selectedTraceId]);
 
   // Initial load and polling
   useEffect(() => {
@@ -80,7 +101,7 @@ export function TraceList() {
           key={trace.id}
           trace={trace}
           isSelected={trace.id === selectedTraceId}
-          onClick={() => selectTrace(trace.id)}
+          onClick={() => handleSelectTrace(trace.id)}
           onDelete={() => deleteTrace(trace.id)}
         />
       ))}

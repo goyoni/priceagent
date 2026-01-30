@@ -151,8 +151,41 @@ function SearchPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // Tab state - default to 'discover' (Find Products)
-  const [activeTab, setActiveTab] = useState<PageTab>('discover');
+  // Get initial tab from URL or default to 'discover'
+  const getTabFromUrl = (): PageTab => {
+    const tab = searchParams.get('tab');
+    if (tab === 'search' || tab === 'discover' || tab === 'shopping-list') {
+      return tab;
+    }
+    // If there's a trace param, default to search tab
+    if (searchParams.get('trace')) {
+      return 'search';
+    }
+    return 'discover';
+  };
+
+  // Tab state - synced with URL
+  const [activeTab, setActiveTab] = useState<PageTab>(getTabFromUrl);
+
+  // Update URL when tab changes
+  const handleTabChange = (tab: PageTab) => {
+    setActiveTab(tab);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('tab', tab);
+    // Remove trace param when switching away from search
+    if (tab !== 'search') {
+      params.delete('trace');
+    }
+    router.push(`/?${params.toString()}`, { scroll: false });
+  };
+
+  // Sync tab with URL changes
+  useEffect(() => {
+    const urlTab = getTabFromUrl();
+    if (urlTab !== activeTab) {
+      setActiveTab(urlTab);
+    }
+  }, [searchParams]);
 
   // Country detection
   const { country, setCountry } = useCountry('IL');
@@ -841,14 +874,15 @@ function SearchPageContent() {
   // Handle click on localStorage history item
   const handleLocalHistoryClick = (item: SearchHistoryItem) => {
     console.log('[LocalHistory] Clicked item:', item.id, item.query, 'traceId:', item.traceId);
-    // Switch to search tab to show results
-    setActiveTab('search');
     if (item.traceId) {
-      // Just update URL - the useEffect watching searchParams will trigger loadTraceResults
-      const newUrl = `/?trace=${item.traceId}`;
-      router.push(newUrl, { scroll: false });
+      // Update URL with both tab and trace - useEffect will handle loading
+      const params = new URLSearchParams();
+      params.set('tab', 'search');
+      params.set('trace', item.traceId);
+      router.push(`/?${params.toString()}`, { scroll: false });
     } else {
-      // No trace ID - just set the query for a new search
+      // No trace ID - switch to search tab and set query
+      handleTabChange('search');
       setQuery(item.query);
     }
   };
@@ -867,10 +901,16 @@ function SearchPageContent() {
   // Handle click on discovery history item
   const handleDiscoveryHistoryClick = (item: DiscoveryHistoryItem) => {
     console.log('[DiscoveryHistory] Clicked item:', item.id, item.query, 'traceId:', item.traceId);
-    // Switch to discover tab to show results
-    setActiveTab('discover');
     if (item.traceId) {
+      // Update URL with both tab and trace
+      const params = new URLSearchParams();
+      params.set('tab', 'discover');
+      params.set('trace', item.traceId);
+      router.push(`/?${params.toString()}`, { scroll: false });
+      // Load the discovery results
       loadDiscoveryFromTrace(item.traceId, item.query);
+    } else {
+      handleTabChange('discover');
     }
   };
 
@@ -969,7 +1009,7 @@ function SearchPageContent() {
         {/* Tab Navigation */}
         <nav className="p-3 space-y-1 border-b border-slate-700">
           <button
-            onClick={() => setActiveTab('discover')}
+            onClick={() => handleTabChange('discover')}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-left ${
               activeTab === 'discover'
                 ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
@@ -982,7 +1022,7 @@ function SearchPageContent() {
             <span className="font-medium">Find Products</span>
           </button>
           <button
-            onClick={() => setActiveTab('search')}
+            onClick={() => handleTabChange('search')}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-left ${
               activeTab === 'search'
                 ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
@@ -995,7 +1035,7 @@ function SearchPageContent() {
             <span className="font-medium">Price Search</span>
           </button>
           <button
-            onClick={() => setActiveTab('shopping-list')}
+            onClick={() => handleTabChange('shopping-list')}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-left ${
               activeTab === 'shopping-list'
                 ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
@@ -1051,6 +1091,7 @@ function SearchPageContent() {
                         <p className="text-xs text-slate-500">{formatRelativeTime(item.timestamp)}</p>
                       </button>
                       <button
+                        data-testid="delete-history-item"
                         onClick={(e) => {
                           e.stopPropagation();
                           deleteFromHistory(item.id);
@@ -1474,8 +1515,8 @@ function SearchPageContent() {
       <div className="p-8">
         <div className="max-w-4xl mx-auto">
           <ShoppingListView
-            onSwitchToDiscover={() => setActiveTab('discover')}
-            onSearchStarted={() => setActiveTab('search')}
+            onSwitchToDiscover={() => handleTabChange('discover')}
+            onSearchStarted={() => handleTabChange('search')}
             country={country}
           />
         </div>
