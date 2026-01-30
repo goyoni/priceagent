@@ -19,6 +19,7 @@ import {
   formatRelativeTime,
 } from '@/lib/searchHistory';
 import type { DiscoveryHistoryItem } from '@/lib/discoveryHistory';
+import { deleteFromDiscoveryHistory } from '@/lib/discoveryHistory';
 import { api } from '@/lib/api';
 import { useDraftStore } from '@/stores/useDraftStore';
 import { DraftModal } from '@/components/drafts/DraftModal';
@@ -843,8 +844,9 @@ function SearchPageContent() {
     // Switch to search tab to show results
     setActiveTab('search');
     if (item.traceId) {
-      updateUrlWithTrace(item.traceId);
-      loadTraceResults(item.traceId);
+      // Just update URL - the useEffect watching searchParams will trigger loadTraceResults
+      const newUrl = `/?trace=${item.traceId}`;
+      router.push(newUrl, { scroll: false });
     } else {
       // No trace ID - just set the query for a new search
       setQuery(item.query);
@@ -1037,14 +1039,32 @@ function SearchPageContent() {
               ) : (
                 <div className="space-y-1">
                   {searchHistory.slice(0, 10).map((item) => (
-                    <button
+                    <div
                       key={item.id}
-                      onClick={() => handleLocalHistoryClick(item)}
-                      className="w-full text-left p-2 rounded-lg hover:bg-slate-800 transition-colors group"
+                      className="relative group"
                     >
-                      <p className="text-sm text-white truncate">{item.query}</p>
-                      <p className="text-xs text-slate-500">{formatRelativeTime(item.timestamp)}</p>
-                    </button>
+                      <button
+                        onClick={() => handleLocalHistoryClick(item)}
+                        className="w-full text-left p-2 rounded-lg hover:bg-slate-800 transition-colors"
+                      >
+                        <p className="text-sm text-white truncate pr-6">{item.query}</p>
+                        <p className="text-xs text-slate-500">{formatRelativeTime(item.timestamp)}</p>
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteFromHistory(item.id);
+                          setSearchHistory(prev => prev.filter(h => h.id !== item.id));
+                        }}
+                        className="absolute right-1 top-1/2 -translate-y-1/2 p-1 text-slate-600 hover:text-red-400
+                                   opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Delete"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
                   ))}
                 </div>
               )
