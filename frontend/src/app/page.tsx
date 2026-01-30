@@ -875,11 +875,15 @@ function SearchPageContent() {
   const handleLocalHistoryClick = (item: SearchHistoryItem) => {
     console.log('[LocalHistory] Clicked item:', item.id, item.query, 'traceId:', item.traceId);
     if (item.traceId) {
-      // Update URL with both tab and trace - useEffect will handle loading
+      // Switch to search tab
+      setActiveTab('search');
+      // Update URL
       const params = new URLSearchParams();
       params.set('tab', 'search');
       params.set('trace', item.traceId);
       router.push(`/?${params.toString()}`, { scroll: false });
+      // Directly load the trace results
+      loadTraceResults(item.traceId);
     } else {
       // No trace ID - switch to search tab and set query
       handleTabChange('search');
