@@ -1,0 +1,198 @@
+/**
+ * ShoppingListView component for managing the shopping list.
+ */
+
+'use client';
+
+import { useState, useCallback } from 'react';
+import { useShoppingListStore } from '@/stores/useShoppingListStore';
+import { ShoppingListItem } from './ShoppingListItem';
+
+interface ShoppingListViewProps {
+  onSwitchToDiscover: () => void;
+}
+
+export function ShoppingListView({ onSwitchToDiscover }: ShoppingListViewProps) {
+  const { items, removeItem, clearList, addItem } = useShoppingListStore();
+
+  const [isAddingManual, setIsAddingManual] = useState(false);
+  const [manualProduct, setManualProduct] = useState('');
+  const [manualModel, setManualModel] = useState('');
+
+  const handleAddManual = useCallback((e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manualProduct.trim()) return;
+
+    addItem({
+      product_name: manualProduct.trim(),
+      model_number: manualModel.trim() || undefined,
+      source: 'manual',
+    });
+
+    setManualProduct('');
+    setManualModel('');
+    setIsAddingManual(false);
+  }, [manualProduct, manualModel, addItem]);
+
+  const handleClearList = useCallback(() => {
+    if (window.confirm('Are you sure you want to clear your entire shopping list?')) {
+      clearList();
+    }
+  }, [clearList]);
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-xl font-semibold text-white">Shopping List</h2>
+            <p className="text-slate-400 text-sm mt-1">
+              {items.length === 0
+                ? 'Add products to compare prices'
+                : `${items.length} item${items.length !== 1 ? 's' : ''} in your list`}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsAddingManual(!isAddingManual)}
+              className="px-3 py-1.5 text-sm bg-slate-700 text-slate-300 hover:bg-slate-600
+                       rounded-lg transition-colors flex items-center gap-1"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                />
+              </svg>
+              Add Manually
+            </button>
+
+            {items.length > 0 && (
+              <button
+                onClick={handleClearList}
+                className="px-3 py-1.5 text-sm text-slate-500 hover:text-red-400
+                         transition-colors"
+              >
+                Clear All
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Manual Add Form */}
+        {isAddingManual && (
+          <form onSubmit={handleAddManual} className="mt-4 p-4 bg-slate-900/50 rounded-lg space-y-3">
+            <div>
+              <label className="block text-sm text-slate-400 mb-1">Product Name *</label>
+              <input
+                type="text"
+                value={manualProduct}
+                onChange={(e) => setManualProduct(e.target.value)}
+                placeholder="e.g., Samsung Refrigerator"
+                className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg
+                         text-white placeholder-slate-500 outline-none
+                         focus:border-cyan-500 transition-colors"
+                autoFocus
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-slate-400 mb-1">Model Number (optional)</label>
+              <input
+                type="text"
+                value={manualModel}
+                onChange={(e) => setManualModel(e.target.value)}
+                placeholder="e.g., RF72DG9620B1"
+                className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg
+                         text-white placeholder-slate-500 outline-none
+                         focus:border-cyan-500 transition-colors"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setIsAddingManual(false)}
+                className="px-3 py-1.5 text-sm text-slate-400 hover:text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={!manualProduct.trim()}
+                className="px-4 py-1.5 text-sm bg-cyan-500 text-white rounded-lg
+                         hover:bg-cyan-400 disabled:bg-slate-600 disabled:text-slate-400
+                         transition-colors"
+              >
+                Add to List
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+
+      {/* List Items */}
+      {items.length === 0 ? (
+        <div className="bg-slate-800/30 border border-slate-700 rounded-xl p-12 text-center">
+          <svg
+            className="w-16 h-16 mx-auto text-slate-600 mb-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={1.5}
+              d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+            />
+          </svg>
+          <p className="text-slate-400 mb-2">Your shopping list is empty</p>
+          <p className="text-slate-500 text-sm mb-4">
+            Use "Find Products" to discover products with AI, or add items manually
+          </p>
+          <button
+            onClick={onSwitchToDiscover}
+            className="px-4 py-2 bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500 hover:text-white
+                     rounded-lg transition-colors text-sm"
+          >
+            Find Products with AI
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {items.map((item) => (
+            <ShoppingListItem
+              key={item.id}
+              item={item}
+              onRemove={removeItem}
+            />
+          ))}
+
+          {/* Price Search Button - placeholder for Commit 5 */}
+          <div className="pt-4 border-t border-slate-700">
+            <button
+              disabled
+              className="w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-500
+                       text-white font-medium rounded-xl
+                       opacity-50 cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
+              </svg>
+              Search Prices for All Items
+              <span className="text-xs opacity-75">(Coming soon)</span>
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

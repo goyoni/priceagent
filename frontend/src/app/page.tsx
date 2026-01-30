@@ -22,7 +22,9 @@ import { api } from '@/lib/api';
 import { useDraftStore } from '@/stores/useDraftStore';
 import { DraftModal } from '@/components/drafts/DraftModal';
 import { ProductDiscoveryView } from '@/components/discovery/ProductDiscoveryView';
+import { ShoppingListView } from '@/components/shopping-list/ShoppingListView';
 import { useCountry } from '@/hooks/useCountry';
+import { useShoppingListStore } from '@/stores/useShoppingListStore';
 import type { ShoppingListItem } from '@/lib/types';
 
 // Tab types for the landing page
@@ -151,8 +153,8 @@ function SearchPageContent() {
   // Country detection
   const { country, setCountry } = useCountry('IL');
 
-  // Shopping list state (temporary - will be moved to store in Commit 3)
-  const [shoppingList, setShoppingList] = useState<ShoppingListItem[]>([]);
+  // Shopping list from store
+  const { items: shoppingList, addItem: addToShoppingList } = useShoppingListStore();
 
   const [query, setQuery] = useState('');
   const [currentTraceId, setCurrentTraceId] = useState<string | null>(null);
@@ -839,16 +841,9 @@ function SearchPageContent() {
 
   // Handler for adding items to shopping list from discovery
   const handleAddToShoppingList = useCallback((item: Omit<ShoppingListItem, 'id' | 'added_at'>) => {
-    const newItem: ShoppingListItem = {
-      ...item,
-      id: `item_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-      added_at: new Date().toISOString(),
-    };
-    setShoppingList(prev => [...prev, newItem]);
-
-    // Show brief feedback (could add a toast here later)
+    const newItem = addToShoppingList(item);
     console.log('[ShoppingList] Added item:', newItem.product_name);
-  }, []);
+  }, [addToShoppingList]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
@@ -1349,80 +1344,7 @@ function SearchPageContent() {
       {/* Shopping List Tab Content */}
       {activeTab === 'shopping-list' && (
         <div className="max-w-4xl mx-auto px-4 py-8">
-          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
-            <h2 className="text-xl font-semibold text-white mb-4">Shopping List</h2>
-
-            {shoppingList.length === 0 ? (
-              <div className="text-center py-12">
-                <svg
-                  className="w-16 h-16 mx-auto text-slate-600 mb-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-                  />
-                </svg>
-                <p className="text-slate-400 mb-2">Your shopping list is empty</p>
-                <p className="text-slate-500 text-sm">
-                  Use "Find Products" to discover products and add them here
-                </p>
-                <button
-                  onClick={() => setActiveTab('discover')}
-                  className="mt-4 px-4 py-2 bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500 hover:text-white
-                           rounded-lg transition-colors text-sm"
-                >
-                  Find Products
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {shoppingList.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center justify-between p-3 bg-slate-900/50 border border-slate-700 rounded-lg"
-                  >
-                    <div>
-                      <div className="text-white font-medium">{item.product_name}</div>
-                      {item.model_number && (
-                        <div className="text-xs text-slate-500">{item.model_number}</div>
-                      )}
-                      {item.specs_summary && (
-                        <div className="text-xs text-slate-400 mt-1">{item.specs_summary}</div>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => setShoppingList(prev => prev.filter(i => i.id !== item.id))}
-                      className="p-2 text-slate-500 hover:text-red-400 transition-colors"
-                      title="Remove from list"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                        />
-                      </svg>
-                    </button>
-                  </div>
-                ))}
-
-                <div className="pt-4 text-center">
-                  <p className="text-slate-500 text-sm mb-3">
-                    {shoppingList.length} item{shoppingList.length !== 1 ? 's' : ''} in your list
-                  </p>
-                  <p className="text-slate-600 text-xs">
-                    Price search feature coming soon...
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
+          <ShoppingListView onSwitchToDiscover={() => setActiveTab('discover')} />
         </div>
       )}
 
