@@ -8,16 +8,19 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useDiscoveryStore } from '@/stores/useDiscoveryStore';
 import { DiscoveryResultsTable } from './DiscoveryResultsTable';
+import { CountrySelector } from '@/components/ui/CountrySelector';
 import type { DiscoveredProduct, ShoppingListItem } from '@/lib/types';
 
 interface ProductDiscoveryViewProps {
   onAddToShoppingList: (item: Omit<ShoppingListItem, 'id' | 'added_at'>) => void;
   country: string;
+  onCountryChange?: (country: string) => void;
 }
 
 export function ProductDiscoveryView({
   onAddToShoppingList,
   country,
+  onCountryChange,
 }: ProductDiscoveryViewProps) {
   const {
     query,
@@ -98,9 +101,17 @@ export function ProductDiscoveryView({
           />
 
           <div className="flex items-center justify-between">
-            <div className="text-xs text-slate-500">
-              Country: {country}
-            </div>
+            {onCountryChange ? (
+              <CountrySelector
+                value={country}
+                onChange={onCountryChange}
+                compact
+              />
+            ) : (
+              <div className="text-xs text-slate-500">
+                Country: {country}
+              </div>
+            )}
             <button
               type="submit"
               disabled={isSearching || !localQuery.trim()}

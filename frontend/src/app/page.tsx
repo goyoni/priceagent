@@ -1396,6 +1396,7 @@ function SearchPageContent() {
           <ProductDiscoveryView
             onAddToShoppingList={handleAddToShoppingList}
             country={country}
+            onCountryChange={setCountry}
           />
         </div>
       )}
