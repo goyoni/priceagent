@@ -58,9 +58,13 @@ echo -e "${GREEN}✓${NC} Python dependencies ready"
 echo ""
 echo -e "${YELLOW}Building frontend...${NC}"
 cd "$FRONTEND_DIR"
-npm run build > /dev/null 2>&1
+if npm run build; then
+    echo -e "${GREEN}✓${NC} Frontend built (static files in frontend/out/)"
+else
+    echo -e "${RED}✗${NC} Frontend build failed"
+    exit 1
+fi
 cd "$PROJECT_DIR"
-echo -e "${GREEN}✓${NC} Frontend built (static files in frontend/out/)"
 
 # Function to cleanup background processes on exit
 cleanup() {
