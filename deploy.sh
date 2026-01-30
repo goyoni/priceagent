@@ -18,7 +18,7 @@ NC='\033[0m'
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN}  PriceAgent - Deploy to Development   ${NC}"
+echo -e "${GREEN}  Shopping Agent - Deploy to Development   ${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
 
@@ -84,6 +84,28 @@ if [ -f "$PROJECT_DIR/frontend/package.json" ]; then
         fi
         cd "$PROJECT_DIR"
     fi
+fi
+
+# Run E2E tests if Playwright is configured
+if [ -f "$PROJECT_DIR/frontend/playwright.config.ts" ]; then
+    echo ""
+    echo -e "${YELLOW}Running E2E tests...${NC}"
+    cd "$PROJECT_DIR/frontend"
+
+    # Check if playwright is installed
+    if npx playwright --version > /dev/null 2>&1; then
+        if npm run test:e2e; then
+            echo -e "${GREEN}✓${NC} E2E tests passed"
+        else
+            echo -e "${RED}✗${NC} E2E tests failed"
+            echo -e "${RED}Deployment aborted. Fix failing E2E tests before deploying.${NC}"
+            exit 1
+        fi
+    else
+        echo -e "${YELLOW}⚠${NC} Playwright not installed - skipping E2E tests"
+        echo -e "${YELLOW}  Run 'cd frontend && npm install && npx playwright install' to enable${NC}"
+    fi
+    cd "$PROJECT_DIR"
 fi
 
 echo ""
