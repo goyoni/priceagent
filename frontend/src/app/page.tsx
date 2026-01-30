@@ -872,22 +872,60 @@ function SearchPageContent() {
   };
 
   // Handle click on localStorage history item
-  const handleLocalHistoryClick = (item: SearchHistoryItem) => {
+  const handleLocalHistoryClick = async (item: SearchHistoryItem) => {
     console.log('[LocalHistory] Clicked item:', item.id, item.query, 'traceId:', item.traceId);
+
+    // Switch to search tab
+    setActiveTab('search');
+    setQuery(item.query);
+
     if (item.traceId) {
-      // Switch to search tab
-      setActiveTab('search');
-      // Update URL
+      // Has traceId - load directly
       const params = new URLSearchParams();
       params.set('tab', 'search');
       params.set('trace', item.traceId);
       router.push(`/?${params.toString()}`, { scroll: false });
-      // Directly load the trace results
       loadTraceResults(item.traceId);
+      return;
+    }
+
+    // No traceId - try to find a matching trace from server history
+    let matchingTrace = recentTraces.find(t =>
+      t.input_prompt.includes(item.query) ||
+      item.query.includes(t.input_prompt.replace('Search for: ', ''))
+    );
+
+    // If not found locally, fetch from API
+    if (!matchingTrace) {
+      try {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+        const response = await fetch(`${apiUrl}/traces/?limit=50`);
+        if (response.ok) {
+          const data = await response.json();
+          const allTraces = data.traces || [];
+          matchingTrace = allTraces.find((t: ServerTrace) =>
+            t.status === 'completed' && (
+              t.input_prompt.includes(item.query) ||
+              item.query.includes(t.input_prompt.replace('Search for: ', ''))
+            )
+          );
+        }
+      } catch (err) {
+        console.error('[LocalHistory] Failed to search traces:', err);
+      }
+    }
+
+    if (matchingTrace) {
+      console.log('[LocalHistory] Found matching trace:', matchingTrace.id);
+      const params = new URLSearchParams();
+      params.set('tab', 'search');
+      params.set('trace', matchingTrace.id);
+      router.push(`/?${params.toString()}`, { scroll: false });
+      loadTraceResults(matchingTrace.id);
     } else {
-      // No trace ID - switch to search tab and set query
+      // No matching trace found - just update URL with tab
       handleTabChange('search');
-      setQuery(item.query);
+      console.log('[LocalHistory] No matching trace found for query:', item.query);
     }
   };
 
