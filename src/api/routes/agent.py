@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from agents import Runner
 from src.agents.product_research import product_research_agent
+from src.agents.product_discovery import product_discovery_agent
 from src.agents.orchestrator import orchestrator_agent
 from src.observability import ObservabilityHooks, get_trace_store
 
@@ -18,7 +19,7 @@ router = APIRouter(prefix="/agent", tags=["agent"])
 class QueryRequest(BaseModel):
     """Request to run an agent query."""
     query: str
-    agent: str = "research"  # research, orchestrator, negotiate
+    agent: str = "research"  # research, orchestrator, negotiate, discovery
 
 
 class QueryResponse(BaseModel):
@@ -43,6 +44,9 @@ async def run_agent_query(request: QueryRequest) -> QueryResponse:
     elif request.agent == "orchestrator":
         agent = orchestrator_agent
         prompt = request.query
+    elif request.agent == "discovery":
+        agent = product_discovery_agent
+        prompt = f"Find products matching: {request.query}"
     else:
         agent = product_research_agent
         prompt = f"Search for: {request.query}"

@@ -145,3 +145,49 @@ class PurchaseSession(BaseModel):
     total_potential_savings: float = 0
     created_at: datetime = Field(default_factory=datetime.now)
     completed_at: Optional[datetime] = None
+
+
+class DiscoveredProduct(BaseModel):
+    """A product discovered through AI-powered recommendations."""
+
+    id: str = Field(default_factory=generate_id)
+    name: str
+    brand: Optional[str] = None
+    model_number: Optional[str] = None
+    category: str
+    key_specs: list[str] = Field(default_factory=list)
+    price_range: Optional[str] = None  # e.g., "8,000-12,000 ILS"
+    why_recommended: str  # Explanation of why this matches requirements
+
+
+class ShoppingListItem(BaseModel):
+    """An item in the user's shopping list."""
+
+    id: str = Field(default_factory=generate_id)
+    product_name: str
+    model_number: Optional[str] = None
+    specs_summary: Optional[str] = None
+    source: str = "manual"  # "manual" or "discovery"
+    added_at: datetime = Field(default_factory=datetime.now)
+
+
+class PriceSearchStatus(str, Enum):
+    """Status of a price search session."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class PriceSearchSession(BaseModel):
+    """A background price search session for shopping list items."""
+
+    id: str = Field(default_factory=generate_id)
+    trace_id: Optional[str] = None
+    list_snapshot: list[ShoppingListItem] = Field(default_factory=list)
+    status: PriceSearchStatus = PriceSearchStatus.PENDING
+    country: str = "IL"
+    started_at: datetime = Field(default_factory=datetime.now)
+    completed_at: Optional[datetime] = None
+    error: Optional[str] = None
