@@ -5,12 +5,21 @@ Provides structured logging for:
 - System operations (scraping, API calls, errors)
 - Performance metrics (latency, cache hits)
 - Business events (negotiations, conversions)
+
+Supports:
+- Console logging (development)
+- File logging (development and production)
+- External log aggregation (production - Grafana Loki compatible)
 """
 
 import json
+import logging
+import os
+import sys
 import time
 from datetime import datetime
 from enum import Enum
+from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 from pathlib import Path
 from typing import Any, Optional
 from contextvars import ContextVar
@@ -63,13 +72,225 @@ class LogEvent(BaseModel):
     error_message: Optional[str] = None
 
 
-# Configure the production logger
+class LogConfig:
+    """Logging configuration from environment variables."""
+
+    # Environment: development, staging, production
+    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
+
+    # Log level: DEBUG, INFO, WARNING, ERROR
+    LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
+
+    # Log format: json or text
+    LOG_FORMAT: str = os.getenv("LOG_FORMAT", "json" if ENVIRONMENT == "production" else "text")
+
+    # File logging
+    LOG_TO_FILE: bool = os.getenv("LOG_TO_FILE", "true").lower() == "true"
+    LOG_DIR: Path = Path(os.getenv("LOG_DIR", "logs"))
+    LOG_FILE_MAX_BYTES: int = int(os.getenv("LOG_FILE_MAX_BYTES", 10 * 1024 * 1024))  # 10MB
+    LOG_FILE_BACKUP_COUNT: int = int(os.getenv("LOG_FILE_BACKUP_COUNT", 5))
+
+    # External logging (Grafana Loki compatible)
+    LOG_EXTERNAL_ENABLED: bool = os.getenv("LOG_EXTERNAL_ENABLED", "false").lower() == "true"
+    LOG_EXTERNAL_ENDPOINT: str = os.getenv("LOG_EXTERNAL_ENDPOINT", "")  # e.g., http://loki:3100/loki/api/v1/push
+    LOG_EXTERNAL_LABELS: str = os.getenv("LOG_EXTERNAL_LABELS", '{"app":"priceagent"}')
+
+    @classmethod
+    def get_labels(cls) -> dict:
+        """Parse external log labels from JSON string."""
+        try:
+            return json.loads(cls.LOG_EXTERNAL_LABELS)
+        except json.JSONDecodeError:
+            return {"app": "priceagent"}
+
+
+class LokiHandler(logging.Handler):
+    """Custom handler for sending logs to Grafana Loki.
+
+    Loki expects logs in this format:
+    {
+        "streams": [
+            {
+                "stream": {"app": "priceagent", "level": "info"},
+                "values": [
+                    ["<unix_nanoseconds>", "<log_line>"]
+                ]
+            }
+        ]
+    }
+    """
+
+    def __init__(self, endpoint: str, labels: dict, batch_size: int = 100, flush_interval: float = 5.0):
+        super().__init__()
+        self.endpoint = endpoint
+        self.base_labels = labels
+        self.batch_size = batch_size
+        self.flush_interval = flush_interval
+        self._buffer: list[tuple[str, str, dict]] = []  # (timestamp_ns, message, labels)
+        self._last_flush = time.time()
+
+    def emit(self, record: logging.LogRecord):
+        """Emit a log record."""
+        try:
+            # Format the message
+            msg = self.format(record)
+
+            # Get timestamp in nanoseconds
+            timestamp_ns = str(int(record.created * 1e9))
+
+            # Add level to labels
+            labels = {**self.base_labels, "level": record.levelname.lower()}
+
+            self._buffer.append((timestamp_ns, msg, labels))
+
+            # Flush if batch is full or interval elapsed
+            if len(self._buffer) >= self.batch_size or (time.time() - self._last_flush) >= self.flush_interval:
+                self.flush()
+
+        except Exception:
+            self.handleError(record)
+
+    def flush(self):
+        """Flush buffered logs to Loki."""
+        if not self._buffer:
+            return
+
+        try:
+            import httpx
+
+            # Group by labels
+            streams: dict[str, list[tuple[str, str]]] = {}
+            for timestamp_ns, msg, labels in self._buffer:
+                key = json.dumps(labels, sort_keys=True)
+                if key not in streams:
+                    streams[key] = []
+                streams[key].append((timestamp_ns, msg))
+
+            # Build Loki payload
+            payload = {
+                "streams": [
+                    {
+                        "stream": json.loads(label_key),
+                        "values": [[ts, msg] for ts, msg in values]
+                    }
+                    for label_key, values in streams.items()
+                ]
+            }
+
+            # Send to Loki (fire and forget, don't block)
+            with httpx.Client(timeout=5.0) as client:
+                client.post(
+                    self.endpoint,
+                    json=payload,
+                    headers={"Content-Type": "application/json"}
+                )
+
+        except Exception as e:
+            # Don't fail if logging fails
+            print(f"Failed to send logs to Loki: {e}", file=sys.stderr)
+
+        finally:
+            self._buffer = []
+            self._last_flush = time.time()
+
+    def close(self):
+        """Close the handler and flush remaining logs."""
+        self.flush()
+        super().close()
+
+
+def setup_file_logging() -> Optional[logging.Handler]:
+    """Set up file-based logging with rotation."""
+    if not LogConfig.LOG_TO_FILE:
+        return None
+
+    # Create log directory
+    LogConfig.LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Main log file with rotation
+    log_file = LogConfig.LOG_DIR / "app.log"
+    handler = RotatingFileHandler(
+        log_file,
+        maxBytes=LogConfig.LOG_FILE_MAX_BYTES,
+        backupCount=LogConfig.LOG_FILE_BACKUP_COUNT,
+    )
+
+    # Use JSON format for file logs (easier to parse)
+    handler.setFormatter(logging.Formatter('%(message)s'))
+    handler.setLevel(getattr(logging, LogConfig.LOG_LEVEL))
+
+    return handler
+
+
+def setup_error_file_logging() -> Optional[logging.Handler]:
+    """Set up separate error log file."""
+    if not LogConfig.LOG_TO_FILE:
+        return None
+
+    LogConfig.LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+    error_log_file = LogConfig.LOG_DIR / "error.log"
+    handler = RotatingFileHandler(
+        error_log_file,
+        maxBytes=LogConfig.LOG_FILE_MAX_BYTES,
+        backupCount=LogConfig.LOG_FILE_BACKUP_COUNT,
+    )
+
+    handler.setFormatter(logging.Formatter('%(message)s'))
+    handler.setLevel(logging.ERROR)
+
+    return handler
+
+
+def setup_external_logging() -> Optional[logging.Handler]:
+    """Set up external log aggregation (Loki)."""
+    if not LogConfig.LOG_EXTERNAL_ENABLED or not LogConfig.LOG_EXTERNAL_ENDPOINT:
+        return None
+
+    handler = LokiHandler(
+        endpoint=LogConfig.LOG_EXTERNAL_ENDPOINT,
+        labels=LogConfig.get_labels(),
+    )
+    handler.setFormatter(logging.Formatter('%(message)s'))
+    handler.setLevel(getattr(logging, LogConfig.LOG_LEVEL))
+
+    return handler
+
+
 def configure_production_logging(log_file: Optional[Path] = None):
-    """Configure structured logging for production.
+    """Configure structured logging for all environments.
 
     Args:
-        log_file: Optional path to log file (in addition to stdout)
+        log_file: Optional path to log file (deprecated, use LOG_DIR env var)
     """
+    # Set up standard library logging handlers
+    root_logger = logging.getLogger()
+    root_logger.setLevel(getattr(logging, LogConfig.LOG_LEVEL))
+
+    # Clear existing handlers
+    root_logger.handlers = []
+
+    # Console handler (always enabled)
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(getattr(logging, LogConfig.LOG_LEVEL))
+    root_logger.addHandler(console_handler)
+
+    # File handler (if enabled)
+    file_handler = setup_file_logging()
+    if file_handler:
+        root_logger.addHandler(file_handler)
+
+    # Error file handler
+    error_handler = setup_error_file_logging()
+    if error_handler:
+        root_logger.addHandler(error_handler)
+
+    # External handler (Loki)
+    external_handler = setup_external_logging()
+    if external_handler:
+        root_logger.addHandler(external_handler)
+
+    # Configure structlog processors
     processors = [
         structlog.stdlib.filter_by_level,
         structlog.stdlib.add_logger_name,
@@ -80,11 +301,12 @@ def configure_production_logging(log_file: Optional[Path] = None):
         structlog.processors.format_exc_info,
         # Add request context
         add_request_context,
+        # Add environment info
+        add_environment_context,
     ]
 
-    # Use JSON renderer for production (easier to parse)
-    import os
-    if os.environ.get("ENVIRONMENT") == "production":
+    # Use JSON renderer for production, colored console for dev
+    if LogConfig.LOG_FORMAT == "json":
         processors.append(structlog.processors.JSONRenderer())
     else:
         processors.append(structlog.dev.ConsoleRenderer(colors=True))
@@ -95,6 +317,18 @@ def configure_production_logging(log_file: Optional[Path] = None):
         context_class=dict,
         logger_factory=structlog.stdlib.LoggerFactory(),
         cache_logger_on_first_use=True,
+    )
+
+    # Log startup info
+    logger = structlog.get_logger(__name__)
+    logger.info(
+        "logging_configured",
+        environment=LogConfig.ENVIRONMENT,
+        log_level=LogConfig.LOG_LEVEL,
+        log_format=LogConfig.LOG_FORMAT,
+        file_logging=LogConfig.LOG_TO_FILE,
+        log_dir=str(LogConfig.LOG_DIR) if LogConfig.LOG_TO_FILE else None,
+        external_logging=LogConfig.LOG_EXTERNAL_ENABLED,
     )
 
 
@@ -111,6 +345,12 @@ def add_request_context(logger, method_name, event_dict):
     if session_id:
         event_dict["session_id"] = session_id
 
+    return event_dict
+
+
+def add_environment_context(logger, method_name, event_dict):
+    """Add environment info to log events."""
+    event_dict["env"] = LogConfig.ENVIRONMENT
     return event_dict
 
 
