@@ -134,6 +134,13 @@ export function ProductDiscoveryView({
     currentTraceIdRef.current = currentTraceId;
   }, [currentTraceId]);
 
+  // Sync localQuery when store query changes (e.g., from loading history)
+  useEffect(() => {
+    if (query !== localQuery) {
+      setLocalQuery(query);
+    }
+  }, [query]);
+
   // Example queries for suggestions
   const exampleQueries = [
     'Silent refrigerator for family of 4',

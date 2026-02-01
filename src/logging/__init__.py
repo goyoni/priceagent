@@ -17,6 +17,7 @@ import logging
 import os
 import sys
 import time
+import threading
 from datetime import datetime
 from enum import Enum
 from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
@@ -131,7 +132,12 @@ class LokiHandler(logging.Handler):
     }
 
     Supports both local Loki and Grafana Cloud with basic auth.
+
+    Resilience: After MAX_CONSECUTIVE_FAILURES, the handler disables itself
+    to avoid spamming logs or impacting performance.
     """
+
+    MAX_CONSECUTIVE_FAILURES = 3  # Disable after this many consecutive failures
 
     def __init__(
         self,
@@ -139,7 +145,7 @@ class LokiHandler(logging.Handler):
         labels: dict,
         auth: tuple[str, str] | None = None,
         batch_size: int = 100,
-        flush_interval: float = 5.0
+        flush_interval: float = 30.0  # Flush every 30 seconds (not 5)
     ):
         super().__init__()
         self.endpoint = endpoint
@@ -149,9 +155,18 @@ class LokiHandler(logging.Handler):
         self.flush_interval = flush_interval
         self._buffer: list[tuple[str, str, dict]] = []  # (timestamp_ns, message, labels)
         self._last_flush = time.time()
+        self._consecutive_failures = 0
+        self._disabled = False
+        self._first_error_logged = False
+        self._lock = threading.Lock()
+        self._flush_in_progress = False
 
     def emit(self, record: logging.LogRecord):
         """Emit a log record."""
+        # Skip if handler has been disabled due to repeated failures
+        if self._disabled:
+            return
+
         try:
             # Format the message
             msg = self.format(record)
@@ -162,26 +177,52 @@ class LokiHandler(logging.Handler):
             # Add level to labels
             labels = {**self.base_labels, "level": record.levelname.lower()}
 
-            self._buffer.append((timestamp_ns, msg, labels))
+            with self._lock:
+                self._buffer.append((timestamp_ns, msg, labels))
+                should_flush = (
+                    len(self._buffer) >= self.batch_size or
+                    (time.time() - self._last_flush) >= self.flush_interval
+                )
 
-            # Flush if batch is full or interval elapsed
-            if len(self._buffer) >= self.batch_size or (time.time() - self._last_flush) >= self.flush_interval:
-                self.flush()
+            # Flush in background thread if needed
+            if should_flush and not self._flush_in_progress:
+                self._flush_async()
 
         except Exception:
             self.handleError(record)
 
+    def _flush_async(self):
+        """Flush in a background thread to avoid blocking."""
+        self._flush_in_progress = True
+        thread = threading.Thread(target=self._do_flush, daemon=True)
+        thread.start()
+
+    def _do_flush(self):
+        """Actual flush operation (runs in background thread)."""
+        try:
+            self.flush()
+        finally:
+            self._flush_in_progress = False
+
     def flush(self):
         """Flush buffered logs to Loki."""
-        if not self._buffer:
+        if self._disabled:
             return
+
+        # Grab buffer under lock
+        with self._lock:
+            if not self._buffer:
+                return
+            buffer_copy = self._buffer[:]
+            self._buffer = []
+            self._last_flush = time.time()
 
         try:
             import httpx
 
             # Group by labels
             streams: dict[str, list[tuple[str, str]]] = {}
-            for timestamp_ns, msg, labels in self._buffer:
+            for timestamp_ns, msg, labels in buffer_copy:
                 key = json.dumps(labels, sort_keys=True)
                 if key not in streams:
                     streams[key] = []
@@ -198,17 +239,34 @@ class LokiHandler(logging.Handler):
                 ]
             }
 
-            # Send to Loki (fire and forget, don't block)
-            with httpx.Client(timeout=5.0, auth=self.auth) as client:
-                client.post(
+            # Send to Loki
+            with httpx.Client(timeout=10.0, auth=self.auth) as client:
+                response = client.post(
                     self.endpoint,
                     json=payload,
                     headers={"Content-Type": "application/json"}
                 )
+                response.raise_for_status()
+
+            # Success - reset failure counter
+            self._consecutive_failures = 0
 
         except Exception as e:
-            # Don't fail if logging fails
-            print(f"Failed to send logs to Loki: {e}", file=sys.stderr)
+            self._consecutive_failures += 1
+
+            # Only log the first error to avoid spamming stderr
+            if not self._first_error_logged:
+                print(f"[LokiHandler] Failed to send logs to Loki: {e}", file=sys.stderr)
+                self._first_error_logged = True
+
+            # Disable handler after repeated failures
+            if self._consecutive_failures >= self.MAX_CONSECUTIVE_FAILURES:
+                self._disabled = True
+                print(
+                    f"[LokiHandler] Disabled after {self._consecutive_failures} consecutive failures. "
+                    "Logs will continue to file/console.",
+                    file=sys.stderr
+                )
 
         finally:
             self._buffer = []
