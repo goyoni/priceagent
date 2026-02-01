@@ -57,11 +57,11 @@ export function ShoppingListView({ onSwitchToDiscover, onSearchStarted, country 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
+      <div className="bg-white shadow-soft border border-gray-200 rounded-xl p-6">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-xl font-semibold text-white">Shopping List</h2>
-            <p className="text-slate-400 text-sm mt-1">
+            <h2 className="text-xl font-semibold text-gray-800">Shopping List</h2>
+            <p className="text-gray-500 text-sm mt-1">
               {items.length === 0
                 ? 'Add products to compare prices'
                 : `${items.length} item${items.length !== 1 ? 's' : ''} in your list`}
@@ -71,7 +71,7 @@ export function ShoppingListView({ onSwitchToDiscover, onSearchStarted, country 
           <div className="flex items-center gap-2">
             <button
               onClick={() => setIsAddingManual(!isAddingManual)}
-              className="px-3 py-1.5 text-sm bg-slate-700 text-slate-300 hover:bg-slate-600
+              className="px-3 py-1.5 text-sm bg-gray-100 text-gray-600 hover:bg-gray-200
                        rounded-lg transition-colors flex items-center gap-1"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -88,7 +88,7 @@ export function ShoppingListView({ onSwitchToDiscover, onSearchStarted, country 
             {items.length > 0 && (
               <button
                 onClick={handleClearList}
-                className="px-3 py-1.5 text-sm text-slate-500 hover:text-red-400
+                className="px-3 py-1.5 text-sm text-gray-400 hover:text-red-400
                          transition-colors"
               >
                 Clear All
@@ -99,45 +99,45 @@ export function ShoppingListView({ onSwitchToDiscover, onSearchStarted, country 
 
         {/* Manual Add Form */}
         {isAddingManual && (
-          <form onSubmit={handleAddManual} className="mt-4 p-4 bg-slate-900/50 rounded-lg space-y-3">
+          <form onSubmit={handleAddManual} className="mt-4 p-4 bg-gray-50 rounded-lg space-y-3">
             <div>
-              <label className="block text-sm text-slate-400 mb-1">Product Name *</label>
+              <label className="block text-sm text-gray-500 mb-1">Product Name *</label>
               <input
                 type="text"
                 value={manualProduct}
                 onChange={(e) => setManualProduct(e.target.value)}
                 placeholder="e.g., Samsung Refrigerator"
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg
-                         text-white placeholder-slate-500 outline-none
-                         focus:border-cyan-500 transition-colors"
+                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg
+                         text-gray-800 placeholder-gray-400 outline-none
+                         focus:border-indigo-500 transition-colors"
                 autoFocus
               />
             </div>
             <div>
-              <label className="block text-sm text-slate-400 mb-1">Model Number (optional)</label>
+              <label className="block text-sm text-gray-500 mb-1">Model Number (optional)</label>
               <input
                 type="text"
                 value={manualModel}
                 onChange={(e) => setManualModel(e.target.value)}
                 placeholder="e.g., RF72DG9620B1"
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg
-                         text-white placeholder-slate-500 outline-none
-                         focus:border-cyan-500 transition-colors"
+                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg
+                         text-gray-800 placeholder-gray-400 outline-none
+                         focus:border-indigo-500 transition-colors"
               />
             </div>
             <div className="flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setIsAddingManual(false)}
-                className="px-3 py-1.5 text-sm text-slate-400 hover:text-white transition-colors"
+                className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={!manualProduct.trim()}
-                className="px-4 py-1.5 text-sm bg-cyan-500 text-white rounded-lg
-                         hover:bg-cyan-400 disabled:bg-slate-600 disabled:text-slate-400
+                className="px-4 py-1.5 text-sm bg-indigo-500 text-white rounded-lg
+                         hover:bg-indigo-400 disabled:bg-gray-200 disabled:text-gray-400
                          transition-colors"
               >
                 Add to List
@@ -149,9 +149,9 @@ export function ShoppingListView({ onSwitchToDiscover, onSearchStarted, country 
 
       {/* List Items */}
       {items.length === 0 ? (
-        <div className="bg-slate-800/30 border border-slate-700 rounded-xl p-12 text-center">
+        <div className="bg-white/30 border border-gray-200 rounded-xl p-12 text-center">
           <svg
-            className="w-16 h-16 mx-auto text-slate-600 mb-4"
+            className="w-16 h-16 mx-auto text-gray-400 mb-4"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -163,13 +163,13 @@ export function ShoppingListView({ onSwitchToDiscover, onSearchStarted, country 
               d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
             />
           </svg>
-          <p className="text-slate-400 mb-2">Your shopping list is empty</p>
-          <p className="text-slate-500 text-sm mb-4">
+          <p className="text-gray-500 mb-2">Your shopping list is empty</p>
+          <p className="text-gray-400 text-sm mb-4">
             Use "Find Products" to discover products with AI, or add items manually
           </p>
           <button
             onClick={onSwitchToDiscover}
-            className="px-4 py-2 bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500 hover:text-white
+            className="px-4 py-2 bg-cyan-500/20 text-indigo-600 hover:bg-cyan-500 hover:text-gray-800
                      rounded-lg transition-colors text-sm"
           >
             Find Products with AI
@@ -186,7 +186,7 @@ export function ShoppingListView({ onSwitchToDiscover, onSearchStarted, country 
           ))}
 
           {/* Price Search Button */}
-          <div className="pt-4 border-t border-slate-700">
+          <div className="pt-4 border-t border-gray-200">
             {searchError && (
               <div className="mb-3 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
                 {searchError}
@@ -196,7 +196,7 @@ export function ShoppingListView({ onSwitchToDiscover, onSearchStarted, country 
               onClick={handleStartSearch}
               disabled={isSearching}
               className={`w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-500
-                       text-white font-medium rounded-xl
+                       text-gray-800 font-medium rounded-xl
                        flex items-center justify-center gap-2 transition-all
                        ${isSearching ? 'opacity-75 cursor-wait' : 'hover:from-emerald-400 hover:to-teal-400'}`}
             >
@@ -234,7 +234,7 @@ export function ShoppingListView({ onSwitchToDiscover, onSearchStarted, country 
                 </>
               )}
             </button>
-            <p className="text-center text-slate-500 text-xs mt-2">
+            <p className="text-center text-gray-400 text-xs mt-2">
               {isSearching
                 ? 'You can continue browsing while we search'
                 : 'We\'ll search all your items at once and notify you when done'}

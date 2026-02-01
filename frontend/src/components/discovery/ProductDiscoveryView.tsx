@@ -1,6 +1,7 @@
 /**
  * ProductDiscoveryView component for AI-powered product recommendations.
  * Allows users to describe what they need in natural language.
+ * Supports conversational refinements.
  */
 
 'use client';
@@ -9,7 +10,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { useDiscoveryStore } from '@/stores/useDiscoveryStore';
 import { DiscoveryResultsTable } from './DiscoveryResultsTable';
 import { CountrySelector } from '@/components/ui/CountrySelector';
-import type { DiscoveredProduct, ShoppingListItem, DiscoveryResponse } from '@/lib/types';
+import type { DiscoveredProduct, ShoppingListItem, DiscoveryResponse, ConversationMessage } from '@/lib/types';
 
 interface ProductDiscoveryViewProps {
   onAddToShoppingList: (item: Omit<ShoppingListItem, 'id' | 'added_at'>) => void;
@@ -103,11 +104,15 @@ export function ProductDiscoveryView({
     criteriaFeedback,
     error,
     statusMessage,
+    messages,
+    sessionId,
     setStatusMessage,
     setError,
     runDiscovery,
+    sendRefinement,
     setSearchComplete,
     clearResults,
+    loadFromMessage,
   } = useDiscoveryStore();
 
   // Sync country from props to store
@@ -119,7 +124,15 @@ export function ProductDiscoveryView({
 
   const [addingProductId, setAddingProductId] = useState<string | undefined>();
   const [localQuery, setLocalQuery] = useState(query);
+  const [refinementInput, setRefinementInput] = useState('');
   const wsRef = useRef<WebSocket | null>(null);
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
+  const currentTraceIdRef = useRef<string | null>(null);
+
+  // Keep ref in sync with current trace ID
+  useEffect(() => {
+    currentTraceIdRef.current = currentTraceId;
+  }, [currentTraceId]);
 
   // Example queries for suggestions
   const exampleQueries = [
@@ -134,24 +147,41 @@ export function ProductDiscoveryView({
     // Skip WebSocket when loading from history - we fetch directly instead
     if (!currentTraceId || !isSearching || isLoadingFromHistory) return;
 
+    // Close any existing WebSocket before creating new one
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
     const wsUrl = apiUrl.replace('http', 'ws') || 'ws://localhost:8000';
+    const traceIdForThisEffect = currentTraceId;  // Capture for this effect instance
 
-    console.log('[Discovery] Connecting WebSocket for trace:', currentTraceId);
+    console.log('[Discovery] Connecting WebSocket for trace:', traceIdForThisEffect);
 
     const ws = new WebSocket(`${wsUrl}/traces/ws`);
     wsRef.current = ws;
 
     ws.onopen = () => {
-      console.log('[Discovery] WebSocket connected');
+      console.log('[Discovery] WebSocket connected for trace:', traceIdForThisEffect);
     };
 
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
 
-        // Only process events for our trace
-        if (data.trace_id !== currentTraceId) return;
+        // Only process events for our trace - use ref to get current value
+        // This prevents stale closure issues when a new search starts
+        if (data.trace_id !== traceIdForThisEffect) {
+          return;
+        }
+
+        // Also check if this is still the active trace
+        if (currentTraceIdRef.current !== traceIdForThisEffect) {
+          console.log('[Discovery] Ignoring message for old trace:', traceIdForThisEffect);
+          ws.close();
+          return;
+        }
 
         // Update status message from span events
         if (data.event_type === 'span_started' && data.data?.name) {
@@ -160,7 +190,7 @@ export function ProductDiscoveryView({
 
         // Handle trace completion
         if (data.event_type === 'trace_ended') {
-          console.log('[Discovery] Trace completed:', currentTraceId);
+          console.log('[Discovery] Trace completed:', traceIdForThisEffect);
 
           if (data.data?.error) {
             console.error('[Discovery] Trace error:', data.data.error);
@@ -193,25 +223,31 @@ export function ProductDiscoveryView({
     };
 
     ws.onclose = () => {
-      console.log('[Discovery] WebSocket closed');
+      console.log('[Discovery] WebSocket closed for trace:', traceIdForThisEffect);
 
-      // If still searching when WebSocket closes, try to fetch trace directly
-      if (isSearching && currentTraceId) {
-        console.log('[Discovery] Fetching trace directly as fallback');
-        fetch(`${apiUrl}/traces/${currentTraceId}`)
-          .then((res) => res.json())
-          .then((trace) => {
-            if (trace.status === 'completed' && trace.final_output) {
-              const response = parseDiscoveryResponse(trace.final_output);
-              setSearchComplete(response);
-            } else if (trace.status === 'error') {
-              setError(trace.error || 'Discovery failed');
-              setSearchComplete({ products: [] });
-            }
-          })
-          .catch((err) => {
-            console.error('[Discovery] Fallback fetch failed:', err);
-          });
+      // Only fetch fallback if this is still the active trace and still searching
+      if (currentTraceIdRef.current === traceIdForThisEffect) {
+        // Use a small delay to check if still searching (state might have updated)
+        setTimeout(() => {
+          const store = useDiscoveryStore.getState();
+          if (store.isSearching && store.currentTraceId === traceIdForThisEffect) {
+            console.log('[Discovery] Fetching trace directly as fallback');
+            fetch(`${apiUrl}/traces/${traceIdForThisEffect}`)
+              .then((res) => res.json())
+              .then((trace) => {
+                if (trace.status === 'completed' && trace.final_output) {
+                  const response = parseDiscoveryResponse(trace.final_output);
+                  setSearchComplete(response);
+                } else if (trace.status === 'error') {
+                  setError(trace.error || 'Discovery failed');
+                  setSearchComplete({ products: [] });
+                }
+              })
+              .catch((err) => {
+                console.error('[Discovery] Fallback fetch failed:', err);
+              });
+          }
+        }, 100);
       }
     };
 
@@ -255,14 +291,34 @@ export function ProductDiscoveryView({
     setQuery(suggestion);
   };
 
+  // Handle refinement submission
+  const handleRefinementSubmit = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!refinementInput.trim() || isSearching || !sessionId) return;
+
+    try {
+      await sendRefinement(refinementInput);
+      setRefinementInput('');
+    } catch (err) {
+      console.error('[Discovery] Refinement failed:', err);
+    }
+  }, [refinementInput, isSearching, sessionId, sendRefinement]);
+
+  // Scroll to bottom when new messages arrive
+  useEffect(() => {
+    if (chatEndRef.current && messages.length > 0) {
+      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages.length]);
+
   return (
     <div className="space-y-6">
       {/* Discovery Form */}
-      <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
-        <h2 className="text-xl font-semibold text-white mb-2">
+      <div className="bg-white shadow-soft border border-gray-200 rounded-xl p-6">
+        <h2 className="text-xl font-semibold text-gray-800 mb-2">
           What are you looking for?
         </h2>
-        <p className="text-slate-400 text-sm mb-4">
+        <p className="text-gray-500 text-sm mb-4">
           Describe your needs in natural language - our AI will find the best products for you.
         </p>
 
@@ -271,9 +327,10 @@ export function ProductDiscoveryView({
             value={localQuery}
             onChange={(e) => setLocalQuery(e.target.value)}
             placeholder="Example: I need a silent refrigerator for a family of 4 with an open kitchen layout"
-            className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-xl
-                     text-white placeholder-slate-500 outline-none resize-none
-                     focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20
+            dir="auto"
+            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl
+                     text-gray-800 placeholder-gray-400 outline-none resize-none
+                     focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20
                      transition-all duration-300"
             rows={3}
             disabled={isSearching}
@@ -287,16 +344,16 @@ export function ProductDiscoveryView({
                 compact
               />
             ) : (
-              <div className="text-xs text-slate-500">
+              <div className="text-xs text-gray-400">
                 Country: {country}
               </div>
             )}
             <button
               type="submit"
               disabled={isSearching || !localQuery.trim()}
-              className="px-6 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500
-                       hover:from-cyan-400 hover:to-blue-400
-                       disabled:from-slate-600 disabled:to-slate-600
+              className="px-6 py-2.5 bg-gradient-to-r from-indigo-500 to-blue-500
+                       hover:from-indigo-400 hover:to-blue-400
+                       disabled:from-gray-200 disabled:to-gray-200
                        text-white font-medium rounded-xl
                        transition-all duration-300 flex items-center gap-2"
             >
@@ -344,7 +401,7 @@ export function ProductDiscoveryView({
 
         {/* Status message */}
         {isSearching && statusMessage && (
-          <div className="mt-4 text-center text-slate-400 text-sm animate-pulse">
+          <div className="mt-4 text-center text-gray-500 text-sm animate-pulse">
             {statusMessage}
           </div>
         )}
@@ -370,16 +427,16 @@ export function ProductDiscoveryView({
           {/* Search summary - what was searched */}
           {searchSummary && (
             <div className="space-y-2">
-              <h3 className="text-slate-300 text-sm font-medium">What we searched for:</h3>
-              <div className="text-slate-400 text-sm">
-                <span className="text-cyan-400">&ldquo;{searchSummary.original_requirement}&rdquo;</span>
+              <h3 className="text-gray-600 text-sm font-medium">What we searched for:</h3>
+              <div className="text-gray-500 text-sm">
+                <span className="text-indigo-600">&ldquo;{searchSummary.original_requirement}&rdquo;</span>
                 {searchSummary.category && (
-                  <span className="ml-2 text-slate-500">({searchSummary.category})</span>
+                  <span className="ml-2 text-gray-400">({searchSummary.category})</span>
                 )}
               </div>
               {searchSummary.search_attempts && searchSummary.search_attempts.length > 0 && (
                 <div className="mt-2">
-                  <span className="text-slate-500 text-xs">
+                  <span className="text-gray-400 text-xs">
                     Searched {searchSummary.search_attempts.length} queries across{' '}
                     {searchSummary.search_attempts.reduce((acc, a) => acc + (a.scrapers?.length || 0), 0)} sources
                   </span>
@@ -391,11 +448,11 @@ export function ProductDiscoveryView({
           {/* Criteria that were used */}
           {criteriaFeedback.length > 0 && (
             <div className="space-y-2">
-              <h3 className="text-slate-300 text-sm font-medium">Search criteria used:</h3>
-              <ul className="text-slate-400 text-sm space-y-1">
+              <h3 className="text-gray-600 text-sm font-medium">Search criteria used:</h3>
+              <ul className="text-gray-500 text-sm space-y-1">
                 {criteriaFeedback.map((criterion, idx) => (
                   <li key={idx} className="flex items-start">
-                    <span className="text-cyan-400 mr-2">{criterion}</span>
+                    <span className="text-indigo-600 mr-2">{criterion}</span>
                   </li>
                 ))}
               </ul>
@@ -405,8 +462,8 @@ export function ProductDiscoveryView({
           {/* Suggestions */}
           {suggestions.length > 0 && (
             <div className="space-y-2">
-              <h3 className="text-slate-300 text-sm font-medium">Suggestions:</h3>
-              <ul className="text-slate-400 text-sm space-y-1">
+              <h3 className="text-gray-600 text-sm font-medium">Suggestions:</h3>
+              <ul className="text-gray-500 text-sm space-y-1">
                 {suggestions.map((suggestion, idx) => (
                   <li key={idx} className="flex items-start">
                     <span className="text-amber-400 mr-2">&#8226;</span>
@@ -420,7 +477,7 @@ export function ProductDiscoveryView({
           {/* Clear button */}
           <button
             onClick={clearResults}
-            className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+            className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
           >
             Clear and try again
           </button>
@@ -430,14 +487,14 @@ export function ProductDiscoveryView({
       {/* Example suggestions (only when no search performed yet) */}
       {!isSearching && products.length === 0 && !error && !noResultsMessage && !searchSummary && criteriaFeedback.length === 0 && (
         <div className="text-center">
-          <p className="text-slate-500 text-sm mb-3">Or try one of these examples:</p>
+          <p className="text-gray-400 text-sm mb-3">Or try one of these examples:</p>
           <div className="flex flex-wrap justify-center gap-2">
             {exampleQueries.map((suggestion) => (
               <button
                 key={suggestion}
                 onClick={() => handleSuggestionClick(suggestion)}
-                className="px-3 py-1.5 text-sm text-slate-400 bg-slate-800/50 rounded-lg
-                         hover:bg-slate-700 hover:text-white transition-colors"
+                className="px-3 py-1.5 text-sm text-gray-500 bg-white shadow-soft rounded-lg
+                         hover:bg-gray-100 hover:text-gray-800 transition-colors"
               >
                 {suggestion}
               </button>
@@ -448,14 +505,14 @@ export function ProductDiscoveryView({
 
       {/* Results */}
       {products.length > 0 && (
-        <div className="bg-slate-800/30 border border-slate-700 rounded-xl p-4">
+        <div className="bg-white/30 border border-gray-200 rounded-xl p-4">
           <div className="flex items-center justify-between mb-4">
-            <span className="text-slate-400 text-sm">
+            <span className="text-gray-500 text-sm">
               Found {products.length} recommended products
             </span>
             <button
               onClick={clearResults}
-              className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+              className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
             >
               Clear results
             </button>
@@ -471,8 +528,8 @@ export function ProductDiscoveryView({
           )}
 
           {searchSummary?.market_notes && !searchSummary?.filtering_notes && (
-            <div className="mb-4 p-3 bg-slate-700/50 border border-slate-600 rounded-lg">
-              <div className="text-slate-400 text-sm">
+            <div className="mb-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+              <div className="text-gray-500 text-sm">
                 <span className="font-medium">Market info:</span> {searchSummary.market_notes}
               </div>
             </div>
@@ -483,6 +540,121 @@ export function ProductDiscoveryView({
             onAddToList={handleAddToList}
             isAddingId={addingProductId}
           />
+
+          {/* Conversation refinement section */}
+          {sessionId && (
+            <div className="mt-6 border-t border-gray-200 pt-6">
+              <h3 className="text-sm font-medium text-gray-600 mb-3">
+                Refine your search
+              </h3>
+
+              {/* Conversation history */}
+              {messages.length > 1 && (
+                <div className="mb-4 max-h-40 overflow-y-auto space-y-2 pr-2">
+                  {messages.slice(1).map((msg) => {
+                    const isAssistant = msg.role === 'assistant';
+                    const isSelected = isAssistant && msg.traceId === currentTraceId;
+                    const isClickable = isAssistant && msg.productsSnapshot && msg.productsSnapshot.length > 0;
+
+                    return (
+                      <div
+                        key={msg.id}
+                        onClick={() => {
+                          if (isClickable) {
+                            loadFromMessage(msg.id);
+                          }
+                        }}
+                        className={`text-sm rounded-lg px-3 py-2 ${
+                          msg.role === 'user'
+                            ? 'bg-indigo-50 text-indigo-700 ml-8'
+                            : `mr-8 ${isSelected
+                                ? 'bg-indigo-100 text-indigo-700 border border-indigo-300'
+                                : 'bg-gray-50 text-gray-600'
+                              } ${isClickable ? 'cursor-pointer hover:bg-gray-100' : ''}`
+                        }`}
+                        title={isClickable ? 'Click to view these results' : undefined}
+                      >
+                        <span className="font-medium">
+                          {msg.role === 'user' ? 'You' : 'AI'}:
+                        </span>{' '}
+                        {msg.content}
+                        {isClickable && (
+                          <span className="ml-1 text-xs text-gray-400">
+                            (click to view)
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                  <div ref={chatEndRef} />
+                </div>
+              )}
+
+              {/* Refinement input */}
+              <form onSubmit={handleRefinementSubmit} className="flex gap-2">
+                <input
+                  type="text"
+                  value={refinementInput}
+                  onChange={(e) => setRefinementInput(e.target.value)}
+                  placeholder="e.g., 'show cheaper options' or 'prefer Samsung'"
+                  dir="auto"
+                  className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg
+                           text-gray-800 placeholder-gray-400 text-sm outline-none
+                           focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20
+                           transition-all duration-300"
+                  disabled={isSearching}
+                />
+                <button
+                  type="submit"
+                  disabled={isSearching || !refinementInput.trim()}
+                  className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-blue-500
+                           hover:from-indigo-400 hover:to-blue-400
+                           disabled:from-gray-200 disabled:to-gray-200
+                           text-white text-sm font-medium rounded-lg
+                           transition-all duration-300 flex items-center gap-1"
+                >
+                  {isSearching ? (
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                        fill="none"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                      />
+                    </svg>
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                    </svg>
+                  )}
+                  Refine
+                </button>
+              </form>
+
+              {/* Quick refinement suggestions */}
+              <div className="mt-2 flex flex-wrap gap-2">
+                {['cheaper options', 'quieter models', 'larger capacity', 'different brands'].map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    onClick={() => setRefinementInput(suggestion)}
+                    disabled={isSearching}
+                    className="text-xs text-gray-500 bg-white hover:bg-gray-100
+                             px-2 py-1 rounded transition-colors disabled:opacity-50"
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

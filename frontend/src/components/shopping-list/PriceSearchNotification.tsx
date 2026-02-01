@@ -37,10 +37,10 @@ export function PriceSearchNotification({
   if (isSearching && activeSearchSession) {
     return (
       <div className="fixed bottom-20 right-4 z-50 animate-slide-in">
-        <div className="bg-slate-800 border border-slate-600 rounded-xl shadow-xl p-4 max-w-sm">
+        <div className="bg-white border border-gray-200 rounded-xl shadow-lg p-4 max-w-sm">
           <div className="flex items-center gap-3">
             <div className="flex-shrink-0">
-              <svg className="w-5 h-5 text-cyan-400 animate-spin" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 text-indigo-500 animate-spin" viewBox="0 0 24 24">
                 <circle
                   className="opacity-25"
                   cx="12"
@@ -58,8 +58,8 @@ export function PriceSearchNotification({
               </svg>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-white text-sm font-medium">Searching prices...</p>
-              <p className="text-slate-400 text-xs truncate">
+              <p className="text-gray-800 text-sm font-medium">Searching prices...</p>
+              <p className="text-gray-500 text-xs truncate">
                 You can continue browsing while we search
               </p>
             </div>
@@ -78,39 +78,39 @@ export function PriceSearchNotification({
   return (
     <div className="fixed bottom-20 right-4 z-50 animate-slide-in">
       <div
-        className={`bg-slate-800 border rounded-xl shadow-xl p-4 max-w-sm ${
-          isSuccess ? 'border-emerald-500/50' : isFailed ? 'border-red-500/50' : 'border-slate-600'
+        className={`bg-white border rounded-xl shadow-lg p-4 max-w-sm ${
+          isSuccess ? 'border-emerald-300' : isFailed ? 'border-red-300' : 'border-gray-200'
         }`}
       >
         <div className="flex items-start gap-3">
           <div className="flex-shrink-0 mt-0.5">
             {isSuccess ? (
-              <svg className="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-5 h-5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             ) : (
-              <svg className="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-5 h-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <p className={`text-sm font-medium ${isSuccess ? 'text-emerald-400' : 'text-red-400'}`}>
+            <p className={`text-sm font-medium ${isSuccess ? 'text-emerald-600' : 'text-red-600'}`}>
               {isSuccess ? 'Price search complete!' : 'Price search failed'}
             </p>
             {isSuccess ? (
-              <p className="text-slate-400 text-xs mt-0.5">
+              <p className="text-gray-500 text-xs mt-0.5">
                 Click to view results in the dashboard
               </p>
             ) : (
-              <p className="text-slate-500 text-xs mt-0.5 line-clamp-2">
+              <p className="text-gray-400 text-xs mt-0.5 line-clamp-2">
                 {activeSearchSession.error || 'An error occurred'}
               </p>
             )}
           </div>
           <button
             onClick={() => setIsVisible(false)}
-            className="flex-shrink-0 text-slate-500 hover:text-white transition-colors"
+            className="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -125,7 +125,7 @@ export function PriceSearchNotification({
               setIsVisible(false);
               setHasNewResults(false);
             }}
-            className="mt-3 w-full py-2 bg-emerald-500/20 text-emerald-400 text-sm rounded-lg
+            className="mt-3 w-full py-2 bg-emerald-50 text-emerald-600 text-sm rounded-lg
                      hover:bg-emerald-500 hover:text-white transition-colors"
           >
             View Results

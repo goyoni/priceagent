@@ -26,8 +26,8 @@ export function CountrySelector({ value, onChange, compact = false }: CountrySel
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="bg-slate-800 border border-slate-600 text-slate-300 text-sm rounded-lg
-                 px-2 py-1 outline-none focus:border-cyan-500 cursor-pointer"
+        className="bg-white border border-gray-200 text-gray-600 text-sm rounded-lg
+                 px-2 py-1 outline-none focus:border-indigo-500 cursor-pointer"
       >
         {SUPPORTED_COUNTRIES.map((country) => (
           <option key={country.code} value={country.code}>
@@ -40,12 +40,12 @@ export function CountrySelector({ value, onChange, compact = false }: CountrySel
 
   return (
     <div className="flex items-center gap-2">
-      <span className="text-sm text-slate-500">Region:</span>
+      <span className="text-sm text-gray-500">Region:</span>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="bg-slate-800 border border-slate-600 text-slate-300 text-sm rounded-lg
-                 px-3 py-1.5 outline-none focus:border-cyan-500 cursor-pointer"
+        className="bg-white border border-gray-200 text-gray-600 text-sm rounded-lg
+                 px-3 py-1.5 outline-none focus:border-indigo-500 cursor-pointer"
       >
         {SUPPORTED_COUNTRIES.map((country) => (
           <option key={country.code} value={country.code}>

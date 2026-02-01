@@ -96,7 +96,7 @@ export function DraftModal() {
                   value={draft.phone_number}
                   onChange={(e) => updateDraftPhone(index, e.target.value)}
                   className="w-48 px-3 py-1.5 bg-surface border border-surface-hover rounded
-                             text-white text-sm focus:outline-none focus:border-primary"
+                             text-gray-800 text-sm focus:outline-none focus:border-primary"
                 />
               </div>
 
@@ -109,7 +109,7 @@ export function DraftModal() {
                   value={draft.message}
                   onChange={(e) => updateDraftMessage(index, e.target.value)}
                   className="w-full min-h-[80px] px-3 py-2 bg-surface border border-surface-hover rounded
-                             text-white text-sm resize-y
+                             text-gray-800 text-sm resize-y
                              focus:outline-none focus:border-primary"
                 />
               </div>
