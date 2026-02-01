@@ -238,7 +238,17 @@ class GoogleSearchDirectScraper(BaseScraper):
         """
         from bs4 import BeautifulSoup
 
-        # Check for WhatsApp links first - most reliable
+        # Check for WhatsApp API links first - most reliable
+        # Matches: api.whatsapp.com/send/?phone=972545472406 or api.whatsapp.com/send?phone=...
+        wa_api_pattern = r'api\.whatsapp\.com/send/?\?phone=(\d+)'
+        wa_api_matches = re.findall(wa_api_pattern, html)
+        if wa_api_matches:
+            phone = wa_api_matches[0]
+            if not phone.startswith('+'):
+                phone = '+' + phone
+            return phone
+
+        # Check for wa.me links
         wa_pattern = r'wa\.me/(\d+)'
         wa_matches = re.findall(wa_pattern, html)
         if wa_matches:

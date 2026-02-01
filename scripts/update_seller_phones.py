@@ -32,7 +32,17 @@ def find_phone_in_html(html: str) -> tuple[Optional[str], str]:
     2. Footer and contact sections
     3. Page body (fallback)
     """
-    # Check for WhatsApp links first - most reliable
+    # Check for WhatsApp API links first - most reliable
+    # Matches: api.whatsapp.com/send/?phone=972545472406 or api.whatsapp.com/send?phone=...
+    wa_api_pattern = r'api\.whatsapp\.com/send/?\?phone=(\d+)'
+    wa_api_matches = re.findall(wa_api_pattern, html)
+    if wa_api_matches:
+        phone = wa_api_matches[0]
+        if not phone.startswith('+'):
+            phone = '+' + phone
+        return phone, "whatsapp_api"
+
+    # Check for wa.me links
     wa_pattern = r'wa\.me/(\d+)'
     wa_matches = re.findall(wa_pattern, html)
     if wa_matches:
