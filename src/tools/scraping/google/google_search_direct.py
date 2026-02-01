@@ -229,25 +229,97 @@ class GoogleSearchDirectScraper(BaseScraper):
         return self._find_phone_in_html(response.text)
 
     def _find_phone_in_html(self, html: str) -> Optional[str]:
-        """Find phone numbers in HTML content."""
-        patterns = [
+        """Find phone numbers in HTML content.
+
+        Prioritizes phone numbers from:
+        1. WhatsApp links (most reliable)
+        2. Footer and contact sections
+        3. Page body (fallback)
+        """
+        from bs4 import BeautifulSoup
+
+        # Check for WhatsApp links first - most reliable
+        wa_pattern = r'wa\.me/(\d+)'
+        wa_matches = re.findall(wa_pattern, html)
+        if wa_matches:
+            phone = wa_matches[0]
+            if not phone.startswith('+'):
+                phone = '+' + phone
+            return phone
+
+        # Also check for whatsapp:// protocol
+        wa_protocol_pattern = r'whatsapp://send\?phone=(\d+)'
+        wa_protocol_matches = re.findall(wa_protocol_pattern, html)
+        if wa_protocol_matches:
+            phone = wa_protocol_matches[0]
+            if not phone.startswith('+'):
+                phone = '+' + phone
+            return phone
+
+        # Israeli phone patterns
+        phone_patterns = [
             r"05\d[\s-]?\d{3}[\s-]?\d{4}",
             r"0[2-9][\s-]?\d{7}",
             r"\+972[\s-]?5\d[\s-]?\d{3}[\s-]?\d{4}",
             r"\+972[\s-]?[2-9][\s-]?\d{7}",
+            r"972[\s-]?5\d[\s-]?\d{3}[\s-]?\d{4}",
         ]
 
-        for pattern in patterns:
-            matches = re.findall(pattern, html)
+        # Parse HTML to look in specific sections first
+        soup = BeautifulSoup(html, "lxml")
+
+        # Priority sections to search for phone numbers
+        priority_selectors = [
+            "footer",
+            ".footer",
+            "#footer",
+            "[class*='contact']",
+            "[id*='contact']",
+            "[class*='phone']",
+            "[id*='phone']",
+            "[class*='whatsapp']",
+            ".about",
+            "#about",
+        ]
+
+        # Search in priority sections first
+        for selector in priority_selectors:
+            elements = soup.select(selector)
+            for element in elements:
+                text = element.get_text()
+                for pattern in phone_patterns:
+                    matches = re.findall(pattern, text)
+                    if matches:
+                        phone = re.sub(r"[\s-]", "", matches[0])
+                        if phone.startswith("972") and not phone.startswith("+"):
+                            phone = "+" + phone
+                        elif phone.startswith("0"):
+                            phone = "+972" + phone[1:]
+                        return phone
+
+        # Fallback: search bottom half of page first
+        lines = html.split('\n')
+        bottom_half = '\n'.join(lines[len(lines)//2:])
+
+        for pattern in phone_patterns:
+            matches = re.findall(pattern, bottom_half)
             if matches:
                 phone = re.sub(r"[\s-]", "", matches[0])
-                if phone.startswith("0"):
+                if phone.startswith("972") and not phone.startswith("+"):
+                    phone = "+" + phone
+                elif phone.startswith("0"):
                     phone = "+972" + phone[1:]
                 return phone
 
-        wa_pattern = r'wa\.me/(\d+)'
-        wa_matches = re.findall(wa_pattern, html)
-        if wa_matches:
-            return "+" + wa_matches[0]
+        # Final fallback: search entire page
+        for pattern in phone_patterns:
+            matches = re.findall(pattern, html)
+            if matches:
+                phone = re.sub(r"[\s-]", "", matches[0])
+                if phone.startswith("972") and not phone.startswith("+"):
+                    phone = "+" + phone
+                elif phone.startswith("0"):
+                    phone = "+972" + phone[1:]
+                return phone
 
         return None
