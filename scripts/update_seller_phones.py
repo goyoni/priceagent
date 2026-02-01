@@ -191,7 +191,7 @@ async def main():
     cursor = conn.cursor()
 
     # Get all sellers
-    cursor.execute("SELECT id, seller_name, domain, phone_number FROM sellers WHERE domain IS NOT NULL AND domain != ''")
+    cursor.execute("SELECT id, seller_name, domain, whatsapp_number FROM sellers WHERE domain IS NOT NULL AND domain != ''")
     sellers = cursor.fetchall()
 
     print(f"\nChecking {len(sellers)} sellers...\n")
@@ -239,7 +239,7 @@ async def main():
         # Ask for confirmation
         print(f"\nTo apply these updates, run:")
         for c in changes:
-            print(f'  sqlite3 {db_path} "UPDATE sellers SET phone_number=\'{c.new_phone}\' WHERE id={c.id};"')
+            print(f'  sqlite3 {db_path} "UPDATE sellers SET whatsapp_number=\'{c.new_phone}\' WHERE id={c.id};"')
 
     conn.close()
 
