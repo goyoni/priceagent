@@ -27,6 +27,22 @@ class EventBatch(BaseModel):
     session_id: Optional[str] = None
 
 
+class ClientLog(BaseModel):
+    """Client-side log entry."""
+    level: str
+    message: str
+    context: Optional[dict] = None
+    timestamp: str
+    session_id: Optional[str] = None
+    url: Optional[str] = None
+    user_agent: Optional[str] = None
+
+
+class LogBatch(BaseModel):
+    """Batch of client-side logs."""
+    logs: list[ClientLog]
+
+
 # Map client actions to server UserAction enum
 ACTION_MAP = {
     ("page_view", "view"): UserAction.PAGE_VIEW,
@@ -80,6 +96,36 @@ async def receive_events(batch: EventBatch, request: Request):
             )
 
     return {"received": len(batch.events)}
+
+
+@router.post("/logs")
+async def receive_logs(batch: LogBatch, request: Request):
+    """Receive log entries from client.
+
+    Args:
+        batch: Batch of log entries
+        request: FastAPI request
+
+    Returns:
+        Acknowledgment
+    """
+    for log_entry in batch.logs:
+        # Map client log level to server logger method
+        level = log_entry.level.lower()
+        log_method = getattr(logger, level, logger.info)
+
+        log_method(
+            "client_log",
+            message=log_entry.message,
+            session_id=log_entry.session_id,
+            url=log_entry.url,
+            user_agent=log_entry.user_agent,
+            client_timestamp=log_entry.timestamp,
+            source="frontend",
+            **(log_entry.context or {}),
+        )
+
+    return {"received": len(batch.logs)}
 
 
 @router.get("/health")
