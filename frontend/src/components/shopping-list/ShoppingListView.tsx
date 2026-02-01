@@ -195,10 +195,10 @@ export function ShoppingListView({ onSwitchToDiscover, onSearchStarted, country 
             <button
               onClick={handleStartSearch}
               disabled={isSearching}
-              className={`w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-500
-                       text-gray-800 font-medium rounded-xl
+              className={`w-full py-3 bg-gradient-to-r from-indigo-500 to-blue-500
+                       text-white font-medium rounded-xl
                        flex items-center justify-center gap-2 transition-all
-                       ${isSearching ? 'opacity-75 cursor-wait' : 'hover:from-emerald-400 hover:to-teal-400'}`}
+                       ${isSearching ? 'opacity-75 cursor-wait' : 'hover:from-indigo-400 hover:to-blue-400'}`}
             >
               {isSearching ? (
                 <>

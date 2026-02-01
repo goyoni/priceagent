@@ -27,9 +27,9 @@ export function SearchBar() {
         value={inputValue}
         onChange={(e) => setInputValue(e.target.value)}
         placeholder="Search for products (e.g., iPhone 15, Samsung TV...)"
-        className="flex-1 px-4 py-2 bg-surface border border-surface-hover rounded-lg
-                   text-white placeholder-secondary
-                   focus:outline-none focus:border-primary"
+        className="flex-1 px-4 py-2 bg-white border border-gray-200 rounded-lg
+                   text-gray-800 placeholder-gray-400
+                   focus:outline-none focus:border-indigo-500"
         disabled={isSearching}
       />
       <Button type="submit" disabled={isSearching || !inputValue.trim()}>
