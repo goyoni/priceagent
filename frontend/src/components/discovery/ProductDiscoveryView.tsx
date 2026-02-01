@@ -92,6 +92,7 @@ export function ProductDiscoveryView({
     query,
     setQuery,
     isSearching,
+    isLoadingFromHistory,
     currentTraceId,
     products,
     searchSummary,
@@ -121,7 +122,8 @@ export function ProductDiscoveryView({
 
   // WebSocket listener for trace completion
   useEffect(() => {
-    if (!currentTraceId || !isSearching) return;
+    // Skip WebSocket when loading from history - we fetch directly instead
+    if (!currentTraceId || !isSearching || isLoadingFromHistory) return;
 
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
     const wsUrl = apiUrl.replace('http', 'ws') || 'ws://localhost:8000';
@@ -210,7 +212,7 @@ export function ProductDiscoveryView({
         wsRef.current = null;
       }
     };
-  }, [currentTraceId, isSearching, setStatusMessage, setError, setSearchComplete]);
+  }, [currentTraceId, isSearching, isLoadingFromHistory, setStatusMessage, setError, setSearchComplete]);
 
   const handleSearch = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();

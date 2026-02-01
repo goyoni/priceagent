@@ -2,7 +2,10 @@
 #
 # Run the full stack: Python backend + Next.js frontend
 #
-# Usage: ./run.sh
+# Usage: ./run.sh [--with-logging]
+#
+# Options:
+#   --with-logging    Start Grafana/Loki logging stack
 #
 
 set -e
@@ -15,6 +18,17 @@ NC='\033[0m' # No Color
 
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 FRONTEND_DIR="$PROJECT_DIR/frontend"
+WITH_LOGGING=false
+
+# Parse arguments
+for arg in "$@"; do
+    case $arg in
+        --with-logging)
+            WITH_LOGGING=true
+            shift
+            ;;
+    esac
+done
 
 echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}  Agent Dashboard - Full Stack Runner  ${NC}"
@@ -54,6 +68,34 @@ echo -e "${YELLOW}Checking Python dependencies...${NC}"
 pip install -q sqlalchemy[asyncio] --trusted-host pypi.org --trusted-host files.pythonhosted.org 2>/dev/null || true
 echo -e "${GREEN}✓${NC} Python dependencies ready"
 
+# Start logging stack if requested
+LOGGING_STARTED=false
+if [ "$WITH_LOGGING" = true ]; then
+    echo ""
+    echo -e "${YELLOW}Starting Grafana/Loki logging stack...${NC}"
+
+    if ! command -v docker &> /dev/null; then
+        echo -e "${RED}Error: Docker is not installed (required for --with-logging)${NC}"
+        echo "Install Docker from https://www.docker.com/get-started"
+    else
+        cd "$PROJECT_DIR/infra"
+        if docker-compose -f docker-compose.logging.yml up -d; then
+            LOGGING_STARTED=true
+            echo -e "${GREEN}✓${NC} Logging stack started"
+            echo -e "    Grafana: http://localhost:3001 (admin/admin)"
+            echo -e "    Loki:    http://localhost:3100"
+
+            # Set environment variables for logging
+            export LOG_EXTERNAL_ENABLED=true
+            export LOG_EXTERNAL_ENDPOINT=http://localhost:3100/loki/api/v1/push
+            export LOG_EXTERNAL_LABELS='{"app":"priceagent","env":"development"}'
+        else
+            echo -e "${YELLOW}⚠${NC} Failed to start logging stack - continuing without it"
+        fi
+        cd "$PROJECT_DIR"
+    fi
+fi
+
 # Build frontend for production (serves on port 8000)
 echo ""
 echo -e "${YELLOW}Building frontend...${NC}"
@@ -75,6 +117,12 @@ cleanup() {
     fi
     if [ ! -z "$BACKEND_PID" ]; then
         kill $BACKEND_PID 2>/dev/null || true
+    fi
+    if [ "$LOGGING_STARTED" = true ]; then
+        echo -e "${YELLOW}Stopping logging stack...${NC}"
+        cd "$PROJECT_DIR/infra"
+        docker-compose -f docker-compose.logging.yml down 2>/dev/null || true
+        cd "$PROJECT_DIR"
     fi
     exit 0
 }
@@ -106,6 +154,10 @@ echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}  App:       http://localhost:8000     ${NC}"
 echo -e "${GREEN}  Dev:       http://localhost:3000     ${NC}"
 echo -e "${GREEN}  API:       http://localhost:8000/agent ${NC}"
+if [ "$LOGGING_STARTED" = true ]; then
+echo -e "${GREEN}  Grafana:   http://localhost:3001     ${NC}"
+echo -e "${GREEN}  Loki:      http://localhost:3100     ${NC}"
+fi
 echo -e "${GREEN}========================================${NC}"
 echo ""
 echo -e "${YELLOW}Press Ctrl+C to stop all services${NC}"

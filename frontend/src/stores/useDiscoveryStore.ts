@@ -9,12 +9,14 @@ import {
   DiscoveryHistoryItem,
   getDiscoveryHistory,
   addToDiscoveryHistory,
+  deleteFromDiscoveryHistory,
 } from '@/lib/discoveryHistory';
 
 interface DiscoveryState {
   // State
   query: string;
   isSearching: boolean;
+  isLoadingFromHistory: boolean;  // Flag to prevent WebSocket connection when loading past results
   currentTraceId: string | null;
   products: DiscoveredProduct[];
   searchSummary: DiscoverySearchSummary | null;
@@ -35,12 +37,14 @@ interface DiscoveryState {
   setSearchComplete: (response: DiscoveryResponse) => void;
   loadHistory: () => void;
   loadFromTrace: (traceId: string, query: string) => Promise<void>;
+  deleteFromHistory: (id: string) => void;
 }
 
 export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
   // Initial state
   query: '',
   isSearching: false,
+  isLoadingFromHistory: false,
   currentTraceId: null,
   products: [],
   searchSummary: null,
@@ -147,6 +151,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
   loadFromTrace: async (traceId: string, query: string) => {
     set({
       isSearching: true,
+      isLoadingFromHistory: true,  // Flag to prevent WebSocket from connecting
       error: null,
       products: [],
       searchSummary: null,
@@ -191,6 +196,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
         suggestions: discoveryResponse.suggestions || [],
         criteriaFeedback: discoveryResponse.criteria_feedback || [],
         isSearching: false,
+        isLoadingFromHistory: false,
         statusMessage: null,
       });
     } catch (err) {
@@ -198,8 +204,17 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
       set({
         error: errorMessage,
         isSearching: false,
+        isLoadingFromHistory: false,
         statusMessage: null,
       });
     }
+  },
+
+  // Delete a discovery from history
+  deleteFromHistory: (id: string) => {
+    deleteFromDiscoveryHistory(id);
+    set((state) => ({
+      history: state.history.filter((item) => item.id !== id),
+    }));
   },
 }));
