@@ -349,36 +349,49 @@ async def _search_multiple_products_impl(
             f"Looking for {len(missing_queries)} missing products at {seller_domain}..."
         )
 
-        # Search for missing products at this seller's site
+        # Search for missing products at this seller's site using direct Google scraping
         import httpx
-        from src.config.settings import settings
+        import re
+
+        GOOGLE_HEADERS = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "he-IL,he;q=0.9,en-US;q=0.8,en;q=0.7",
+        }
 
         for missing_query in missing_queries:
-            if not settings.serpapi_key:
-                break
-
             try:
-                # Use Google site-specific search
+                # Use Google site-specific search via direct HTTP
                 search_query = f"site:{seller_domain} {missing_query}"
 
                 params = {
-                    "engine": "google",
                     "q": search_query,
                     "gl": "il",
                     "hl": "he",
-                    "api_key": settings.serpapi_key,
                     "num": 5,
                 }
 
-                async with httpx.AsyncClient(timeout=15.0) as client:
-                    response = await client.get("https://serpapi.com/search.json", params=params)
+                async with httpx.AsyncClient(timeout=15.0, headers=GOOGLE_HEADERS) as client:
+                    response = await client.get("https://www.google.com/search", params=params)
                     if response.status_code == 200:
-                        data = response.json()
-                        organic_results = data.get("organic_results", [])
+                        html = response.text
 
-                        if organic_results:
+                        # Extract URLs from Google search results
+                        # Pattern to find search result links
+                        url_patterns = [
+                            rf'href="(https?://(?:www\.)?{re.escape(seller_domain)}[^"]*)"',
+                            rf'href="/url\?q=(https?://(?:www\.)?{re.escape(seller_domain)}[^&"]*)',
+                        ]
+
+                        result_url = None
+                        for pattern in url_patterns:
+                            matches = re.findall(pattern, html, re.IGNORECASE)
+                            if matches:
+                                result_url = matches[0]
+                                break
+
+                        if result_url:
                             # Found the product at this seller!
-                            result_url = organic_results[0].get("link", "")
                             logger.info(
                                 "Found missing product at seller",
                                 seller=agg.seller_name,

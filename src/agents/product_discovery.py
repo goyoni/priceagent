@@ -186,7 +186,6 @@ async def _research_and_discover_impl(
     """
     import structlog
     import httpx
-    from src.config.settings import settings
 
     logger = structlog.get_logger()
     country_info = get_country_info(country)
@@ -207,52 +206,58 @@ async def _research_and_discover_impl(
         "social_mentions": [],
     }
 
-    if not settings.serpapi_key:
-        await record_warning("No SerpAPI key - using LLM knowledge only")
-    else:
-        # Search queries in user's language
-        search_queries = _generate_research_queries(requirement, language, lang_code)
+    # Use direct Google scraping for research
+    import re
+    GOOGLE_HEADERS = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": f"{lang_code}-{country},{lang_code};q=0.9,en-US;q=0.8,en;q=0.7",
+    }
 
-        for query_info in search_queries[:4]:  # Limit to 4 queries
-            try:
-                await report_progress(
-                    "🔍 Searching",
-                    f"{query_info['purpose']}: {query_info['query'][:50]}..."
-                )
+    # Search queries in user's language
+    search_queries = _generate_research_queries(requirement, language, lang_code)
 
-                params = {
-                    "engine": "google",
-                    "q": query_info["query"],
-                    "gl": country.lower(),
-                    "hl": lang_code,
-                    "api_key": settings.serpapi_key,
-                    "num": 8,
-                }
+    for query_info in search_queries[:4]:  # Limit to 4 queries
+        try:
+            await report_progress(
+                "🔍 Searching",
+                f"{query_info['purpose']}: {query_info['query'][:50]}..."
+            )
 
-                async with httpx.AsyncClient(timeout=15.0) as client:
-                    response = await client.get("https://serpapi.com/search.json", params=params)
-                    if response.status_code == 200:
-                        data = response.json()
-                        organic_results = data.get("organic_results", [])
+            params = {
+                "q": query_info["query"],
+                "gl": country.lower(),
+                "hl": lang_code,
+                "num": 10,
+            }
 
-                        for result in organic_results[:5]:
-                            title = result.get("title", "")
-                            snippet = result.get("snippet", "")
-                            link = result.get("link", "")
+            async with httpx.AsyncClient(timeout=15.0, headers=GOOGLE_HEADERS) as client:
+                response = await client.get("https://www.google.com/search", params=params)
+                if response.status_code == 200:
+                    html = response.text
 
-                            if title and snippet:
-                                research_data[query_info["category"]].append({
-                                    "title": title,
-                                    "snippet": snippet,
-                                    "url": link,
-                                    "source_type": query_info["purpose"],
-                                })
+                    # Parse search results from Google HTML
+                    # Extract titles, snippets, and URLs from search result divs
+                    results = _parse_google_search_results(html)
 
-                        await record_search("google_research", cached=False)
+                    for result in results[:5]:
+                        title = result.get("title", "")
+                        snippet = result.get("snippet", "")
+                        link = result.get("url", "")
 
-            except Exception as e:
-                logger.warning("Research query failed", query=query_info["query"], error=str(e))
-                await record_error(f"Research failed: {str(e)[:100]}")
+                        if title and snippet:
+                            research_data[query_info["category"]].append({
+                                "title": title,
+                                "snippet": snippet,
+                                "url": link,
+                                "source_type": query_info["purpose"],
+                            })
+
+                    await record_search("google_research", cached=False)
+
+        except Exception as e:
+            logger.warning("Research query failed", query=query_info["query"], error=str(e))
+            await record_error(f"Research failed: {str(e)[:100]}")
 
     # Use LLM to analyze research and extract criteria + recommendations
     await report_progress(
@@ -396,6 +401,88 @@ Based on this research, provide:
             "original_requirement": requirement,
             "country": country,
         }, ensure_ascii=False)
+
+
+def _parse_google_search_results(html: str) -> list[dict]:
+    """Parse Google search results from HTML.
+
+    Extracts titles, snippets, and URLs from Google search result page.
+    """
+    import re
+    from bs4 import BeautifulSoup
+
+    results = []
+    soup = BeautifulSoup(html, "lxml")
+
+    # Find search result divs - Google uses various class names
+    # Try multiple selectors to find organic results
+    selectors = [
+        "div.g",  # Classic Google result div
+        "div[data-hveid]",  # Alternative data attribute
+        "div.tF2Cxc",  # Another common class
+    ]
+
+    result_divs = []
+    for selector in selectors:
+        result_divs = soup.select(selector)
+        if result_divs:
+            break
+
+    for div in result_divs[:10]:
+        try:
+            # Extract URL - look for the main link
+            link_elem = div.select_one("a[href^='http']")
+            if not link_elem:
+                link_elem = div.select_one("a[href^='/url']")
+
+            url = ""
+            if link_elem:
+                href = link_elem.get("href", "")
+                if href.startswith("/url?q="):
+                    # Extract actual URL from Google redirect
+                    url = href.split("/url?q=")[1].split("&")[0]
+                else:
+                    url = href
+
+            # Skip Google's own pages
+            if "google.com" in url or not url:
+                continue
+
+            # Extract title - usually in h3
+            title_elem = div.select_one("h3")
+            title = title_elem.get_text(strip=True) if title_elem else ""
+
+            # Extract snippet - look for common snippet containers
+            snippet = ""
+            snippet_selectors = [
+                "div.VwiC3b",
+                "span.aCOpRe",
+                "div[data-content-feature]",
+                "div.IsZvec",
+            ]
+            for snippet_sel in snippet_selectors:
+                snippet_elem = div.select_one(snippet_sel)
+                if snippet_elem:
+                    snippet = snippet_elem.get_text(strip=True)
+                    break
+
+            if not snippet:
+                # Fallback: get text from div excluding title
+                all_text = div.get_text(strip=True)
+                if title and title in all_text:
+                    snippet = all_text.replace(title, "").strip()[:300]
+
+            if title and url:
+                results.append({
+                    "title": title,
+                    "snippet": snippet,
+                    "url": url,
+                })
+
+        except Exception:
+            continue
+
+    return results
 
 
 def _generate_research_queries(requirement: str, language: str, lang_code: str) -> list:
@@ -757,6 +844,40 @@ async def _analyze_and_format_results_impl(
     country = research.get("country", "IL")
     country_info = get_country_info(country)
 
+    # Deduplicate products by model number (keep the one with lowest price)
+    seen_models: dict[str, dict] = {}
+    deduplicated_products = []
+    for product in products:
+        model = product.get("model_number") or product.get("model") or ""
+        name = product.get("name", "")
+
+        # Create a key from model or product name
+        key = model.lower().strip() if model else name.lower().strip()
+        if not key:
+            deduplicated_products.append(product)
+            continue
+
+        if key in seen_models:
+            # Keep the one with lower price
+            existing_price = seen_models[key].get("price") or float("inf")
+            new_price = product.get("price") or float("inf")
+            if new_price < existing_price:
+                # Replace with cheaper option
+                deduplicated_products = [p for p in deduplicated_products if p != seen_models[key]]
+                deduplicated_products.append(product)
+                seen_models[key] = product
+        else:
+            seen_models[key] = product
+            deduplicated_products.append(product)
+
+    if len(products) != len(deduplicated_products):
+        logger.info(
+            "Deduplicated products",
+            original_count=len(products),
+            deduplicated_count=len(deduplicated_products)
+        )
+        products = deduplicated_products
+
     # Build search summary (always included)
     # Include market context from criteria
     market_notes = research.get("market_notes", "")
@@ -815,9 +936,15 @@ async def _analyze_and_format_results_impl(
         system_prompt = f"""You are a product analyst using ADAPTIVE FILTERING.
 
 Your job is to:
-1. Score ALL products against criteria
-2. If strict criteria eliminate all products, RELAX criteria based on market reality
-3. Always return the BEST AVAILABLE products, even if they don't perfectly match
+1. FIRST: Validate criteria for logical impossibilities (e.g., "dishwasher without electricity" - all dishwashers require electricity)
+2. Score ALL products against VALID criteria
+3. If strict criteria eliminate all products, RELAX criteria based on market reality
+4. Always return the BEST AVAILABLE products, even if they don't perfectly match
+
+CRITERIA VALIDATION:
+- If a criterion is physically/logically impossible, IGNORE IT and note why in filtering_notes
+- Examples of impossible criteria: "dishwasher without electricity", "silent jackhammer", "waterproof paper"
+- Do NOT claim products meet impossible criteria - be honest that the criterion was ignored
 
 ADAPTIVE FILTERING RULES:
 - If criteria specify "< 40dB" but best available is 42dB, accept 42dB as "best in market"
@@ -1009,6 +1136,26 @@ Example prompt: "Find products matching: silent refrigerator for family of 4\nUs
 
 If no country is specified, default to "IL".
 
+## HANDLING CONVERSATION REFINEMENTS
+
+If the prompt contains "Previous conversation:" followed by "User's refinement request:", this is a REFINEMENT of an earlier search.
+
+For refinements:
+1. Understand what was searched previously from the conversation history
+2. Apply the user's refinement criteria (e.g., "cheaper", "quieter", "different brand", "larger capacity")
+3. You may need to:
+   - Re-run research with additional constraints
+   - Filter the previous results based on new criteria
+   - Search for alternative products if the refinement is significant
+
+Common refinement patterns:
+- "cheaper/more affordable" → focus on lower price range
+- "quieter/silent" → add noise level as priority criteria
+- "prefer [brand]" → filter to specific brand
+- "larger/bigger" → increase capacity requirements
+- "show more options" → expand the search
+- "without [feature]" → exclude products with that feature
+
 ## WORKFLOW (Follow these steps in order):
 
 ### Step 1: RESEARCH AND DISCOVER
@@ -1063,6 +1210,7 @@ Your final response must be the JSON from step 3. It includes:
 5. Use correct currency and units for user's country (IL uses ₪, liters, cm)
 6. If no products found, still return the search_summary so user knows what was tried
 7. Prioritize finding specific recommended models over generic searches
+8. For refinements, incorporate the user's feedback into the search criteria
 """,
     tools=[research_and_discover, search_products_smart, analyze_and_format_results],
 )
