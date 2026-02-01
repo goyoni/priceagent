@@ -163,14 +163,20 @@ export interface DiscoveredProduct {
   match_score?: 'high' | 'medium' | 'low' | 'unknown';
   criteria_match?: {
     matched?: string[];
+    adapted?: string[];
     unknown?: string[];
     unmet?: string[];
   };
+  market_reality_note?: string;
 }
 
 export interface DiscoveryCriterion {
   attribute: string;
-  value: string;
+  value?: string;
+  ideal_value?: string;
+  market_value?: string;
+  market_context?: string;
+  is_flexible?: boolean;
   source?: string;
   confidence?: 'high' | 'medium' | 'low';
   explanation?: string;
@@ -192,7 +198,8 @@ export interface DiscoverySearchSummary {
   search_attempts: DiscoverySearchAttempt[];
   total_products_found: number;
   research_quality?: 'good' | 'moderate' | 'limited' | 'unknown';
-  notes?: string;
+  market_notes?: string;
+  filtering_notes?: string;
   error?: string;
 }
 
@@ -202,6 +209,8 @@ export interface DiscoveryResponse {
   no_results_message?: string;
   suggestions?: string[];
   criteria_feedback?: string[];
+  market_notes?: string;
+  filtering_notes?: string;
 }
 
 // Shopping List types

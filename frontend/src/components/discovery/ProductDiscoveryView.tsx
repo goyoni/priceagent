@@ -450,6 +450,23 @@ export function ProductDiscoveryView({
             </button>
           </div>
 
+          {/* Market notes / Filtering notes - show when criteria were adapted */}
+          {searchSummary?.filtering_notes && (
+            <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+              <div className="text-blue-400 text-sm">
+                <span className="font-medium">Note:</span> {searchSummary.filtering_notes}
+              </div>
+            </div>
+          )}
+
+          {searchSummary?.market_notes && !searchSummary?.filtering_notes && (
+            <div className="mb-4 p-3 bg-slate-700/50 border border-slate-600 rounded-lg">
+              <div className="text-slate-400 text-sm">
+                <span className="font-medium">Market info:</span> {searchSummary.market_notes}
+              </div>
+            </div>
+          )}
+
           <DiscoveryResultsTable
             products={products}
             onAddToList={handleAddToList}
