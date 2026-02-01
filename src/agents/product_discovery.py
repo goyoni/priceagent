@@ -28,11 +28,51 @@ from src.observability import report_progress, record_search, record_error, reco
 
 # Country to language mapping
 COUNTRY_LANGUAGES = {
-    "IL": {"language": "Hebrew", "code": "he", "currency": "₪", "currency_name": "ILS"},
-    "US": {"language": "English", "code": "en", "currency": "$", "currency_name": "USD"},
-    "UK": {"language": "English", "code": "en", "currency": "£", "currency_name": "GBP"},
-    "DE": {"language": "German", "code": "de", "currency": "€", "currency_name": "EUR"},
-    "FR": {"language": "French", "code": "fr", "currency": "€", "currency_name": "EUR"},
+    "IL": {
+        "language": "Hebrew",
+        "code": "he",
+        "currency": "₪",
+        "currency_name": "ILS",
+        "metric_system": "metric",
+        "volume_unit": "liters",
+        "dimension_unit": "cm",
+    },
+    "US": {
+        "language": "English",
+        "code": "en",
+        "currency": "$",
+        "currency_name": "USD",
+        "metric_system": "imperial",
+        "volume_unit": "cubic feet",
+        "dimension_unit": "inches",
+    },
+    "UK": {
+        "language": "English",
+        "code": "en",
+        "currency": "£",
+        "currency_name": "GBP",
+        "metric_system": "metric",
+        "volume_unit": "liters",
+        "dimension_unit": "cm",
+    },
+    "DE": {
+        "language": "German",
+        "code": "de",
+        "currency": "€",
+        "currency_name": "EUR",
+        "metric_system": "metric",
+        "volume_unit": "liters",
+        "dimension_unit": "cm",
+    },
+    "FR": {
+        "language": "French",
+        "code": "fr",
+        "currency": "€",
+        "currency_name": "EUR",
+        "metric_system": "metric",
+        "volume_unit": "liters",
+        "dimension_unit": "cm",
+    },
 }
 
 # Product type translations for common appliances
@@ -84,7 +124,10 @@ def get_country_info(country: str) -> dict:
         "language": "English",
         "code": "en",
         "currency": "$",
-        "currency_name": "USD"
+        "currency_name": "USD",
+        "metric_system": "metric",
+        "volume_unit": "liters",
+        "dimension_unit": "cm",
     })
 
 
@@ -237,6 +280,11 @@ CRITICAL - MARKET REALITY:
 - Include specific model numbers when mentioned in research
 - Prices must be in {currency} ({country_info['currency_name']})
 - If research is insufficient, acknowledge uncertainty
+
+UNITS - Use {country}'s measurement system:
+- Volume: {country_info['volume_unit']} (NOT {('cubic feet' if country_info['volume_unit'] == 'liters' else 'liters')})
+- Dimensions: {country_info['dimension_unit']} (NOT {('inches' if country_info['dimension_unit'] == 'cm' else 'cm')})
+- Always convert to local units if source uses different system
 
 Respond with valid JSON only."""
 
@@ -777,7 +825,10 @@ ADAPTIVE FILTERING RULES:
 - Prioritize products that are relatively best, not just those matching absolute criteria
 - Include market_reality_note explaining any adaptations made
 
-Currency for prices: {country_info['currency']} ({country_info['currency_name']})
+UNITS - Use {country}'s measurement system:
+- Volume: {country_info['volume_unit']} (NOT {('cubic feet' if country_info['volume_unit'] == 'liters' else 'liters')})
+- Dimensions: {country_info['dimension_unit']}
+- Currency for prices: {country_info['currency']} ({country_info['currency_name']})
 
 Respond with valid JSON only."""
 
@@ -947,6 +998,17 @@ product_discovery_agent = Agent(
     name="ProductDiscovery",
     instructions="""You are a product discovery specialist that performs deep research to help users find the right products.
 
+## EXTRACTING COUNTRY FROM PROMPT
+
+The user's prompt will contain "User country: XX" where XX is the country code (IL, US, UK, DE, FR, etc.).
+ALWAYS extract this country code and pass it to all tool calls.
+
+Example prompt: "Find products matching: silent refrigerator for family of 4\nUser country: IL"
+- Extract country = "IL" (Israel)
+- Pass country="IL" to all tools
+
+If no country is specified, default to "IL".
+
 ## WORKFLOW (Follow these steps in order):
 
 ### Step 1: RESEARCH AND DISCOVER
@@ -956,6 +1018,7 @@ This tool:
 - Finds specific product models recommended by experts
 - Extracts research-backed criteria (not arbitrary numbers)
 - Returns both criteria AND specific model recommendations
+- Uses the country's measurement system (metric for IL/EU, imperial for US)
 
 ### Step 2: SMART SEARCH
 Use `search_products_smart` with the research JSON and country.
@@ -993,12 +1056,13 @@ Your final response must be the JSON from step 3. It includes:
 
 ## IMPORTANT RULES
 
-1. ALWAYS complete all 3 steps
-2. ALWAYS return valid JSON (no markdown, no explanations outside JSON)
-3. NEVER guess criteria - base them on research
-4. Use correct currency for user's country
-5. If no products found, still return the search_summary so user knows what was tried
-6. Prioritize finding specific recommended models over generic searches
+1. ALWAYS extract the country from the prompt first
+2. ALWAYS complete all 3 steps
+3. ALWAYS return valid JSON (no markdown, no explanations outside JSON)
+4. NEVER guess criteria - base them on research
+5. Use correct currency and units for user's country (IL uses ₪, liters, cm)
+6. If no products found, still return the search_summary so user knows what was tried
+7. Prioritize finding specific recommended models over generic searches
 """,
     tools=[research_and_discover, search_products_smart, analyze_and_format_results],
 )

@@ -15,6 +15,7 @@ import {
 interface DiscoveryState {
   // State
   query: string;
+  country: string;
   isSearching: boolean;
   isLoadingFromHistory: boolean;  // Flag to prevent WebSocket connection when loading past results
   currentTraceId: string | null;
@@ -29,11 +30,12 @@ interface DiscoveryState {
 
   // Actions
   setQuery: (query: string) => void;
+  setCountry: (country: string) => void;
   setProducts: (products: DiscoveredProduct[]) => void;
   setError: (error: string | null) => void;
   setStatusMessage: (message: string | null) => void;
   clearResults: () => void;
-  runDiscovery: (query: string) => Promise<string>;
+  runDiscovery: (query: string, country?: string) => Promise<string>;
   setSearchComplete: (response: DiscoveryResponse) => void;
   loadHistory: () => void;
   loadFromTrace: (traceId: string, query: string) => Promise<void>;
@@ -43,6 +45,7 @@ interface DiscoveryState {
 export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
   // Initial state
   query: '',
+  country: 'IL',
   isSearching: false,
   isLoadingFromHistory: false,
   currentTraceId: null,
@@ -57,6 +60,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
 
   // Sync actions
   setQuery: (query) => set({ query }),
+  setCountry: (country) => set({ country }),
   setProducts: (products) => set({ products }),
   setError: (error) => set({ error }),
   setStatusMessage: (message) => set({ statusMessage: message }),
@@ -79,7 +83,8 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
   },
 
   // Start a discovery search
-  runDiscovery: async (query) => {
+  runDiscovery: async (query, country) => {
+    const effectiveCountry = country || get().country;
     set({
       isSearching: true,
       error: null,
@@ -89,11 +94,12 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
       suggestions: [],
       criteriaFeedback: [],
       query,
+      country: effectiveCountry,
       statusMessage: 'Starting product discovery...',
     });
 
     try {
-      const response = await api.runDiscovery(query);
+      const response = await api.runDiscovery(query, effectiveCountry);
       set({
         currentTraceId: response.trace_id,
         statusMessage: 'Researching products...',

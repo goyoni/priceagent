@@ -91,6 +91,8 @@ export function ProductDiscoveryView({
   const {
     query,
     setQuery,
+    country: storeCountry,
+    setCountry,
     isSearching,
     isLoadingFromHistory,
     currentTraceId,
@@ -107,6 +109,13 @@ export function ProductDiscoveryView({
     setSearchComplete,
     clearResults,
   } = useDiscoveryStore();
+
+  // Sync country from props to store
+  useEffect(() => {
+    if (country !== storeCountry) {
+      setCountry(country);
+    }
+  }, [country, storeCountry, setCountry]);
 
   const [addingProductId, setAddingProductId] = useState<string | undefined>();
   const [localQuery, setLocalQuery] = useState(query);
@@ -219,11 +228,11 @@ export function ProductDiscoveryView({
     if (!localQuery.trim() || isSearching) return;
 
     try {
-      await runDiscovery(localQuery);
+      await runDiscovery(localQuery, country);
     } catch (err) {
       console.error('[Discovery] Search failed:', err);
     }
-  }, [localQuery, isSearching, runDiscovery]);
+  }, [localQuery, isSearching, runDiscovery, country]);
 
   const handleAddToList = useCallback((product: DiscoveredProduct) => {
     setAddingProductId(product.id);

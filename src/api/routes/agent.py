@@ -20,6 +20,7 @@ class QueryRequest(BaseModel):
     """Request to run an agent query."""
     query: str
     agent: str = "research"  # research, orchestrator, negotiate, discovery
+    country: str = "IL"  # Country code for localization
 
 
 class QueryResponse(BaseModel):
@@ -46,7 +47,7 @@ async def run_agent_query(request: QueryRequest) -> QueryResponse:
         prompt = request.query
     elif request.agent == "discovery":
         agent = product_discovery_agent
-        prompt = f"Find products matching: {request.query}"
+        prompt = f"Find products matching: {request.query}\nUser country: {request.country}"
     else:
         agent = product_research_agent
         prompt = f"Search for: {request.query}"

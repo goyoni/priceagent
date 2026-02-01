@@ -131,11 +131,12 @@ class ApiClient {
    * Run a product discovery query.
    */
   async runDiscovery(
-    query: string
+    query: string,
+    country: string = 'IL'
   ): Promise<{ trace_id: string; status: string }> {
     return this.fetch('/agent/run', {
       method: 'POST',
-      body: JSON.stringify({ query, agent: 'discovery' }),
+      body: JSON.stringify({ query, agent: 'discovery', country }),
     });
   }
 
