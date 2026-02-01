@@ -17,6 +17,12 @@ Every change must be committed separately with a descriptive message:
 
 **Types:** `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
 
+**IMPORTANT: Commit Frequently**
+- Commit after every logical change, not at the end of a session
+- Each feature, fix, or improvement should be its own commit
+- Do not batch multiple unrelated changes into one commit
+- Push to git after each commit to ensure work is saved
+
 **Example:**
 ```
 feat: Add bulk WhatsApp messaging with editable templates
