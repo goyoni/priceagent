@@ -30,6 +30,7 @@ from src.api.routes.sellers import router as sellers_router
 from src.api.routes.analytics import router as analytics_router
 from src.api.routes.geo import router as geo_router
 from src.api.routes.shopping_list import router as shopping_list_router
+from src.api.routes.logs import router as logs_router
 from src.api.middleware import RequestLoggingMiddleware
 from src.db.base import init_db
 from src.logging import configure_production_logging
@@ -60,6 +61,7 @@ app.include_router(sellers_router)
 app.include_router(analytics_router)
 app.include_router(geo_router)
 app.include_router(shopping_list_router)
+app.include_router(logs_router)
 
 # Initialize global trace store
 trace_store = TraceStore()
