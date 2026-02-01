@@ -141,6 +141,27 @@ class ApiClient {
   }
 
   /**
+   * Run a discovery refinement with conversation history.
+   */
+  async runDiscoveryRefinement(
+    query: string,
+    country: string = 'IL',
+    conversationHistory: Array<{ role: string; content: string }>,
+    sessionId: string
+  ): Promise<{ trace_id: string; status: string }> {
+    return this.fetch('/agent/run', {
+      method: 'POST',
+      body: JSON.stringify({
+        query,
+        agent: 'discovery',
+        country,
+        conversation_history: conversationHistory,
+        session_id: sessionId,
+      }),
+    });
+  }
+
+  /**
    * Get country from IP detection.
    */
   async getCountry(): Promise<{ country: string; source: string }> {

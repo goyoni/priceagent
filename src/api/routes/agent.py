@@ -16,11 +16,19 @@ from src.observability import ObservabilityHooks, get_trace_store
 router = APIRouter(prefix="/agent", tags=["agent"])
 
 
+class ConversationMessage(BaseModel):
+    """A message in the conversation history."""
+    role: str
+    content: str
+
+
 class QueryRequest(BaseModel):
     """Request to run an agent query."""
     query: str
     agent: str = "research"  # research, orchestrator, negotiate, discovery
     country: str = "IL"  # Country code for localization
+    conversation_history: list[ConversationMessage] = []  # Previous conversation for refinements
+    session_id: Optional[str] = None  # Session ID for tracking conversation
 
 
 class QueryResponse(BaseModel):
@@ -47,13 +55,27 @@ async def run_agent_query(request: QueryRequest) -> QueryResponse:
         prompt = request.query
     elif request.agent == "discovery":
         agent = product_discovery_agent
-        prompt = f"Find products matching: {request.query}\nUser country: {request.country}"
+        # Build prompt with conversation history for refinements
+        if request.conversation_history:
+            history_text = "\n".join([
+                f"{msg.role.capitalize()}: {msg.content}"
+                for msg in request.conversation_history[:-1]  # Exclude current message
+            ])
+            prompt = f"""Previous conversation:
+{history_text}
+
+User's refinement request: {request.query}
+User country: {request.country}
+
+Based on the conversation history, refine the product recommendations accordingly."""
+        else:
+            prompt = f"Find products matching: {request.query}\nUser country: {request.country}"
     else:
         agent = product_research_agent
         prompt = f"Search for: {request.query}"
 
-    # Start trace
-    trace = await hooks.start_trace(input_prompt=prompt)
+    # Start trace with session ID if provided
+    trace = await hooks.start_trace(input_prompt=prompt, session_id=request.session_id)
 
     # Run agent in background using asyncio.create_task
     # This schedules the coroutine on the current event loop

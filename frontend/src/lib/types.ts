@@ -213,6 +213,16 @@ export interface DiscoveryResponse {
   filtering_notes?: string;
 }
 
+// Conversation types for product discovery
+export interface ConversationMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: number;
+  traceId?: string;  // Associated trace ID for this message
+  productsSnapshot?: DiscoveredProduct[];  // Products at this point in conversation
+}
+
 // Shopping List types
 export interface ShoppingListItem {
   id: string;

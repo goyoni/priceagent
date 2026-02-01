@@ -6,7 +6,7 @@ from .registry import ScraperRegistry
 # Import country-specific scrapers to register them
 from . import israel
 
-# Import Google scrapers (work for any country with SerpAPI)
+# Import Google scrapers (direct HTTP scraping, no external API needed)
 from . import google
 
 __all__ = ["BaseScraper", "ScraperConfig", "ScraperRegistry"]

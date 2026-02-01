@@ -35,9 +35,31 @@ export function getDiscoveryHistory(): DiscoveryHistoryItem[] {
 
 /**
  * Add a new discovery to history.
+ * Prevents duplicates by traceId.
  */
 export function addToDiscoveryHistory(item: Omit<DiscoveryHistoryItem, 'id'>): DiscoveryHistoryItem {
   const history = getDiscoveryHistory();
+
+  // Prevent duplicates by traceId
+  if (item.traceId) {
+    const existingIndex = history.findIndex(h => h.traceId === item.traceId);
+    if (existingIndex !== -1) {
+      // Update existing entry instead of adding duplicate
+      const existing = history[existingIndex];
+      existing.productCount = item.productCount;
+      existing.timestamp = item.timestamp;
+      history.splice(existingIndex, 1);
+      history.unshift(existing);
+
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+      } catch (error) {
+        console.error('[DiscoveryHistory] Failed to save:', error);
+      }
+
+      return existing;
+    }
+  }
 
   const newItem: DiscoveryHistoryItem = {
     ...item,
