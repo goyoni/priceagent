@@ -19,6 +19,7 @@ async def list_traces(limit: int = 50):
             {
                 "id": t.id,
                 "session_id": t.session_id,
+                "parent_trace_id": t.parent_trace_id,
                 "input_prompt": t.input_prompt[:100] + "..." if len(t.input_prompt) > 100 else t.input_prompt,
                 "status": t.status.value,
                 "started_at": t.started_at.isoformat(),
@@ -64,6 +65,7 @@ async def get_trace(trace_id: str):
     return {
         "id": trace.id,
         "session_id": trace.session_id,
+        "parent_trace_id": trace.parent_trace_id,
         "input_prompt": trace.input_prompt,
         "final_output": trace.final_output,
         "status": trace.status.value,

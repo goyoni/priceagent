@@ -191,12 +191,12 @@ class ObservabilityHooks(RunHooksBase):
         self._llm_spans: dict[str, str] = {}  # Map of context hash to span ID
         self._tool_spans: dict[int, str] = {}  # Map of context id to span ID (for correct pairing of parallel calls)
 
-    async def start_trace(self, input_prompt: str, session_id: Optional[str] = None) -> Trace:
+    async def start_trace(self, input_prompt: str, session_id: Optional[str] = None, parent_trace_id: Optional[str] = None) -> Trace:
         """Start a new trace. Call this before Runner.run()."""
         global _current_hooks
         _current_hooks = self
 
-        trace = await self.store.create_trace(input_prompt=input_prompt, session_id=session_id)
+        trace = await self.store.create_trace(input_prompt=input_prompt, session_id=session_id, parent_trace_id=parent_trace_id)
         self._current_trace_id = trace.id
         self._agent_span_stack = []
         self._llm_spans = {}

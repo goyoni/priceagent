@@ -29,6 +29,7 @@ class QueryRequest(BaseModel):
     country: str = "IL"  # Country code for localization
     conversation_history: list[ConversationMessage] = []  # Previous conversation for refinements
     session_id: Optional[str] = None  # Session ID for tracking conversation
+    parent_trace_id: Optional[str] = None  # Links to parent trace in conversation flow
 
 
 class QueryResponse(BaseModel):
@@ -74,8 +75,12 @@ Based on the conversation history, refine the product recommendations accordingl
         agent = product_research_agent
         prompt = f"Search for: {request.query}"
 
-    # Start trace with session ID if provided
-    trace = await hooks.start_trace(input_prompt=prompt, session_id=request.session_id)
+    # Start trace with session ID and parent trace ID if provided
+    trace = await hooks.start_trace(
+        input_prompt=prompt,
+        session_id=request.session_id,
+        parent_trace_id=request.parent_trace_id
+    )
 
     # Run agent in background using asyncio.create_task
     # This schedules the coroutine on the current event loop

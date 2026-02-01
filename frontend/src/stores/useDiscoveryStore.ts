@@ -19,6 +19,7 @@ interface DiscoveryState {
   isSearching: boolean;
   isLoadingFromHistory: boolean;  // Flag to prevent WebSocket connection when loading past results
   currentTraceId: string | null;
+  originalTraceId: string | null;  // First trace ID in conversation (for linking child traces)
   products: DiscoveredProduct[];
   searchSummary: DiscoverySearchSummary | null;
   noResultsMessage: string | null;
@@ -56,6 +57,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
   isSearching: false,
   isLoadingFromHistory: false,
   currentTraceId: null,
+  originalTraceId: null,
   products: [],
   searchSummary: null,
   noResultsMessage: null,
@@ -85,6 +87,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
     error: null,
     statusMessage: null,
     currentTraceId: null,
+    originalTraceId: null,
     messages: [],
     sessionId: null,
   }),
@@ -131,6 +134,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
       const response = await api.runDiscovery(query, effectiveCountry);
       set({
         currentTraceId: response.trace_id,
+        originalTraceId: response.trace_id,  // Store as original trace for conversation
         statusMessage: 'Researching products...',
       });
       return response.trace_id;
@@ -147,7 +151,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
 
   // Send a refinement message in the current conversation
   sendRefinement: async (message: string) => {
-    const { products, country, messages, sessionId } = get();
+    const { products, country, messages, sessionId, originalTraceId } = get();
     if (!sessionId) {
       throw new Error('No active session');
     }
@@ -179,7 +183,8 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
         message,
         country,
         conversationHistory,
-        sessionId
+        sessionId,
+        originalTraceId || undefined  // Link to original trace in conversation
       );
 
       set({

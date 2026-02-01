@@ -26,9 +26,9 @@ class TraceStore:
         # Load existing traces from disk
         self._load_from_disk()
 
-    async def create_trace(self, input_prompt: str, session_id: Optional[str] = None) -> Trace:
+    async def create_trace(self, input_prompt: str, session_id: Optional[str] = None, parent_trace_id: Optional[str] = None) -> Trace:
         """Create and store a new trace."""
-        trace = Trace(input_prompt=input_prompt, session_id=session_id)
+        trace = Trace(input_prompt=input_prompt, session_id=session_id, parent_trace_id=parent_trace_id)
 
         async with self._lock:
             self._traces[trace.id] = trace

@@ -78,6 +78,8 @@ export interface OperationalSummary {
 
 export interface Trace {
   id: string;
+  session_id?: string;
+  parent_trace_id?: string;  // Links to parent trace in conversation flow
   input_prompt: string;
   final_output?: string;
   status: 'running' | 'completed' | 'error';

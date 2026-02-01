@@ -114,6 +114,7 @@ class Trace(BaseModel):
 
     id: str = Field(default_factory=lambda: str(uuid4()))
     session_id: Optional[str] = None
+    parent_trace_id: Optional[str] = None  # Links to parent trace in conversation
     started_at: datetime = Field(default_factory=datetime.utcnow)
     ended_at: Optional[datetime] = None
     status: SpanStatus = SpanStatus.RUNNING

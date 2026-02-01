@@ -147,7 +147,8 @@ class ApiClient {
     query: string,
     country: string = 'IL',
     conversationHistory: Array<{ role: string; content: string }>,
-    sessionId: string
+    sessionId: string,
+    parentTraceId?: string
   ): Promise<{ trace_id: string; status: string }> {
     return this.fetch('/agent/run', {
       method: 'POST',
@@ -157,6 +158,7 @@ class ApiClient {
         country,
         conversation_history: conversationHistory,
         session_id: sessionId,
+        parent_trace_id: parentTraceId,
       }),
     });
   }
