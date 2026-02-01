@@ -77,7 +77,7 @@ class Settings(BaseSettings):
         default=1000, description="Max items in memory cache"
     )
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
 
 settings = Settings()
