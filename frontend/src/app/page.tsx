@@ -1203,16 +1203,22 @@ function SearchPageContent() {
                 </div>
               ) : (
                 <div className="space-y-1">
-                  {searchHistory.slice(0, 10).map((item) => (
+                  {searchHistory.slice(0, 10).map((item) => {
+                    const isActive = item.traceId === priceSearchTraceId;
+                    return (
                     <div
                       key={item.id}
                       className="relative group"
                     >
                       <button
                         onClick={() => handleLocalHistoryClick(item)}
-                        className="w-full text-left p-2 rounded-lg hover:bg-white transition-colors"
+                        className={`w-full text-left p-2 rounded-lg transition-colors ${
+                          isActive
+                            ? 'bg-indigo-50 border border-indigo-200'
+                            : 'hover:bg-white'
+                        }`}
                       >
-                        <p className="text-sm text-gray-800 truncate pr-6">{item.query}</p>
+                        <p className={`text-sm truncate pr-6 ${isActive ? 'text-indigo-700 font-medium' : 'text-gray-800'}`}>{item.query}</p>
                         <p className="text-xs text-gray-400">{formatRelativeTime(item.timestamp)}</p>
                       </button>
                       <button
@@ -1231,7 +1237,7 @@ function SearchPageContent() {
                         </svg>
                       </button>
                     </div>
-                  ))}
+                  );})}
                 </div>
               )
             ) : activeTab === 'discover' ? (
