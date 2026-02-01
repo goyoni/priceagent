@@ -90,10 +90,14 @@ class LogConfig:
     LOG_FILE_MAX_BYTES: int = int(os.getenv("LOG_FILE_MAX_BYTES", 10 * 1024 * 1024))  # 10MB
     LOG_FILE_BACKUP_COUNT: int = int(os.getenv("LOG_FILE_BACKUP_COUNT", 5))
 
-    # External logging (Grafana Loki compatible)
+    # External logging (Grafana Loki / Grafana Cloud compatible)
     LOG_EXTERNAL_ENABLED: bool = os.getenv("LOG_EXTERNAL_ENABLED", "false").lower() == "true"
-    LOG_EXTERNAL_ENDPOINT: str = os.getenv("LOG_EXTERNAL_ENDPOINT", "")  # e.g., http://loki:3100/loki/api/v1/push
+    LOG_EXTERNAL_ENDPOINT: str = os.getenv("LOG_EXTERNAL_ENDPOINT", "")  # e.g., https://logs-prod-xxx.grafana.net/loki/api/v1/push
     LOG_EXTERNAL_LABELS: str = os.getenv("LOG_EXTERNAL_LABELS", '{"app":"priceagent"}')
+
+    # Grafana Cloud authentication (optional - for cloud hosted Loki)
+    LOG_EXTERNAL_USER: str = os.getenv("LOG_EXTERNAL_USER", "")  # Grafana Cloud user ID
+    LOG_EXTERNAL_API_KEY: str = os.getenv("LOG_EXTERNAL_API_KEY", "")  # Grafana Cloud API key
 
     @classmethod
     def get_labels(cls) -> dict:
@@ -102,6 +106,13 @@ class LogConfig:
             return json.loads(cls.LOG_EXTERNAL_LABELS)
         except json.JSONDecodeError:
             return {"app": "priceagent"}
+
+    @classmethod
+    def get_auth(cls) -> tuple[str, str] | None:
+        """Get authentication credentials if configured."""
+        if cls.LOG_EXTERNAL_USER and cls.LOG_EXTERNAL_API_KEY:
+            return (cls.LOG_EXTERNAL_USER, cls.LOG_EXTERNAL_API_KEY)
+        return None
 
 
 class LokiHandler(logging.Handler):
@@ -118,12 +129,22 @@ class LokiHandler(logging.Handler):
             }
         ]
     }
+
+    Supports both local Loki and Grafana Cloud with basic auth.
     """
 
-    def __init__(self, endpoint: str, labels: dict, batch_size: int = 100, flush_interval: float = 5.0):
+    def __init__(
+        self,
+        endpoint: str,
+        labels: dict,
+        auth: tuple[str, str] | None = None,
+        batch_size: int = 100,
+        flush_interval: float = 5.0
+    ):
         super().__init__()
         self.endpoint = endpoint
         self.base_labels = labels
+        self.auth = auth  # (user_id, api_key) for Grafana Cloud
         self.batch_size = batch_size
         self.flush_interval = flush_interval
         self._buffer: list[tuple[str, str, dict]] = []  # (timestamp_ns, message, labels)
@@ -178,7 +199,7 @@ class LokiHandler(logging.Handler):
             }
 
             # Send to Loki (fire and forget, don't block)
-            with httpx.Client(timeout=5.0) as client:
+            with httpx.Client(timeout=5.0, auth=self.auth) as client:
                 client.post(
                     self.endpoint,
                     json=payload,
@@ -243,13 +264,14 @@ def setup_error_file_logging() -> Optional[logging.Handler]:
 
 
 def setup_external_logging() -> Optional[logging.Handler]:
-    """Set up external log aggregation (Loki)."""
+    """Set up external log aggregation (Loki / Grafana Cloud)."""
     if not LogConfig.LOG_EXTERNAL_ENABLED or not LogConfig.LOG_EXTERNAL_ENDPOINT:
         return None
 
     handler = LokiHandler(
         endpoint=LogConfig.LOG_EXTERNAL_ENDPOINT,
         labels=LogConfig.get_labels(),
+        auth=LogConfig.get_auth(),  # None for local Loki, (user, key) for Grafana Cloud
     )
     handler.setFormatter(logging.Formatter('%(message)s'))
     handler.setLevel(getattr(logging, LogConfig.LOG_LEVEL))
