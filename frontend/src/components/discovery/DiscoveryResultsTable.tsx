@@ -75,27 +75,31 @@ function DiscoveryProductRow({
       <td className="px-3 py-3">
         <div className="font-medium text-gray-800">{product.name}</div>
         {product.model_number && (
-          <div className="text-xs text-gray-400">{product.model_number}</div>
+          <div className="text-sm font-mono text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded inline-block mt-1">
+            {product.model_number}
+          </div>
         )}
-        {product.url ? (
-          <a
-            href={product.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-indigo-600 hover:underline"
-          >
-            View product
-          </a>
-        ) : (
-          <a
-            href={`https://www.google.com/search?q=${encodeURIComponent((product.brand ? product.brand + ' ' : '') + (product.model_number || product.name))}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-indigo-600 hover:underline"
-          >
-            Search on Google
-          </a>
-        )}
+        <div className="mt-1">
+          {product.url ? (
+            <a
+              href={product.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-indigo-600 hover:underline"
+            >
+              View product
+            </a>
+          ) : (
+            <a
+              href={`https://www.google.com/search?q=${encodeURIComponent((product.brand ? product.brand + ' ' : '') + (product.model_number || product.name))}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-indigo-600 hover:underline"
+            >
+              Search on Google
+            </a>
+          )}
+        </div>
       </td>
       <td className="px-3 py-3 text-gray-600">{product.brand || '-'}</td>
       <td className="px-3 py-3">

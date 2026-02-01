@@ -318,7 +318,12 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
 
       // Helper to extract user query from child trace input_prompt
       const extractUserQuery = (inputPrompt: string): string => {
-        // Child traces have format "Previous conversation:\nUser: ...\nAssistant: ...\n\nNew user message: ..."
+        // Child traces have format "...User's refinement request: <query>\nUser country: ..."
+        const refinementMatch = inputPrompt.match(/User's refinement request:\s*(.+?)(?:\n|$)/);
+        if (refinementMatch) {
+          return refinementMatch[1].trim();
+        }
+        // Fallback: try "New user message:" format
         const newMsgMatch = inputPrompt.match(/New user message:\s*(.+)/s);
         if (newMsgMatch) {
           return newMsgMatch[1].trim();
