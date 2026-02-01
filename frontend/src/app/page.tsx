@@ -203,6 +203,7 @@ function SearchPageContent() {
   // Discovery history from store
   const {
     history: discoveryHistory,
+    currentTraceId: discoveryCurrentTraceId,
     loadHistory: loadDiscoveryHistory,
     loadFromTrace: loadDiscoveryFromTrace,
     deleteFromHistory: deleteDiscoveryHistoryItem,
@@ -210,7 +211,7 @@ function SearchPageContent() {
   } = useDiscoveryStore();
 
   const [query, setQuery] = useState('');
-  const [currentTraceId, setCurrentTraceId] = useState<string | null>(null);
+  const [priceSearchTraceId, setPriceSearchTraceId] = useState<string | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [isLoadingTrace, setIsLoadingTrace] = useState(false);
   const [results, setResults] = useState<ProductResult[]>([]);
@@ -459,11 +460,11 @@ function SearchPageContent() {
   // Load trace from URL parameter on mount
   useEffect(() => {
     const traceId = searchParams.get('trace');
-    if (traceId && traceId !== currentTraceId) {
+    if (traceId && traceId !== priceSearchTraceId) {
       loadTraceResults(traceId);
-    } else if (!traceId && currentTraceId) {
+    } else if (!traceId && priceSearchTraceId) {
       // Trace param was removed (e.g., switching tabs) - clear results
-      setCurrentTraceId(null);
+      setPriceSearchTraceId(null);
       setResults([]);
       setBundles([]);
       setSelectedSellers([]);
@@ -497,7 +498,7 @@ function SearchPageContent() {
 
       if (trace.status === 'completed') {
         setQuery(trace.input_prompt.replace('Search for: ', ''));
-        setCurrentTraceId(traceId);
+        setPriceSearchTraceId(traceId);
         setSearchTime(trace.total_duration_ms);
 
         // Look for search tool output in spans (like dashboard does)
@@ -609,7 +610,7 @@ function SearchPageContent() {
   const updateUrlWithTrace = (traceId: string) => {
     const newUrl = `/?trace=${traceId}`;
     router.replace(newUrl, { scroll: false });
-    setCurrentTraceId(traceId);
+    setPriceSearchTraceId(traceId);
   };
 
   // Elapsed time counter during search
@@ -1244,16 +1245,22 @@ function SearchPageContent() {
                 </div>
               ) : (
                 <div className="space-y-1">
-                  {discoveryHistory.slice(0, 10).map((item) => (
+                  {discoveryHistory.slice(0, 10).map((item) => {
+                    const isActive = item.traceId === discoveryCurrentTraceId;
+                    return (
                     <div
                       key={item.id}
                       className="relative group"
                     >
                       <button
                         onClick={() => handleDiscoveryHistoryClick(item)}
-                        className="w-full text-left p-2 rounded-lg hover:bg-white transition-colors"
+                        className={`w-full text-left p-2 rounded-lg transition-colors ${
+                          isActive
+                            ? 'bg-indigo-50 border border-indigo-200'
+                            : 'hover:bg-white'
+                        }`}
                       >
-                        <p className="text-sm text-gray-800 truncate pr-6">{item.query}</p>
+                        <p className={`text-sm truncate pr-6 ${isActive ? 'text-indigo-700 font-medium' : 'text-gray-800'}`}>{item.query}</p>
                         <div className="flex items-center gap-2 text-xs text-gray-400">
                           <span>{formatRelativeTime(item.timestamp)}</span>
                           {item.productCount > 0 && (
@@ -1278,7 +1285,7 @@ function SearchPageContent() {
                         </svg>
                       </button>
                     </div>
-                  ))}
+                  );})}
                 </div>
               )
             ) : (
@@ -1292,16 +1299,22 @@ function SearchPageContent() {
                 </div>
               ) : (
                 <div className="space-y-1">
-                  {searchHistory.slice(0, 5).map((item) => (
+                  {searchHistory.slice(0, 5).map((item) => {
+                    const isActive = item.traceId === priceSearchTraceId;
+                    return (
                     <button
                       key={item.id}
                       onClick={() => handleLocalHistoryClick(item)}
-                      className="w-full text-left p-2 rounded-lg hover:bg-white transition-colors group"
+                      className={`w-full text-left p-2 rounded-lg transition-colors group ${
+                        isActive
+                          ? 'bg-indigo-50 border border-indigo-200'
+                          : 'hover:bg-white'
+                      }`}
                     >
-                      <p className="text-sm text-gray-800 truncate">{item.query}</p>
+                      <p className={`text-sm truncate ${isActive ? 'text-indigo-700 font-medium' : 'text-gray-800'}`}>{item.query}</p>
                       <p className="text-xs text-gray-400">{formatRelativeTime(item.timestamp)}</p>
                     </button>
-                  ))}
+                  );})}
                 </div>
               )
             )}
