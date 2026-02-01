@@ -22,17 +22,17 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<DashboardTab>('traces');
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className="min-h-screen flex flex-col bg-slate-900 text-white">
       <Header />
 
       <main className="flex-1 flex flex-col p-4 gap-4">
         {/* Search bar */}
-        <section className="bg-surface rounded-lg p-4">
+        <section className="bg-slate-800 rounded-lg p-4">
           <SearchBar />
         </section>
 
         {/* Tab navigation */}
-        <div className="flex items-center gap-1 bg-surface rounded-lg p-1 w-fit">
+        <div className="flex items-center gap-1 bg-slate-800 rounded-lg p-1 w-fit">
           <button
             onClick={() => setActiveTab('traces')}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
@@ -71,19 +71,19 @@ export default function Dashboard() {
         {activeTab === 'traces' ? (
           <div className="flex-1 flex gap-4 min-h-0">
             {/* Trace list - left sidebar */}
-            <aside className="w-80 bg-surface rounded-lg overflow-hidden flex flex-col">
-              <div className="px-4 py-3 border-b border-surface-hover">
-                <h2 className="font-medium">Recent Traces</h2>
+            <aside className="w-80 bg-slate-800 rounded-lg overflow-hidden flex flex-col">
+              <div className="px-4 py-3 border-b border-slate-700">
+                <h2 className="font-medium text-white">Recent Traces</h2>
               </div>
               <div className="flex-1 overflow-y-auto">
-                <Suspense fallback={<div className="p-4 text-center text-secondary">Loading...</div>}>
+                <Suspense fallback={<div className="p-4 text-center text-slate-400">Loading...</div>}>
                   <TraceList />
                 </Suspense>
               </div>
             </aside>
 
             {/* Trace detail - main area */}
-            <section className="flex-1 bg-surface rounded-lg overflow-hidden">
+            <section className="flex-1 bg-slate-800 rounded-lg overflow-hidden">
               <TraceDetail />
             </section>
           </div>

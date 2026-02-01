@@ -15,7 +15,7 @@ export function TraceDetail() {
 
   if (!selectedTraceId) {
     return (
-      <div className="h-full flex items-center justify-center text-secondary">
+      <div className="h-full flex items-center justify-center text-slate-400">
         <p>Select a trace to view details</p>
       </div>
     );
@@ -23,7 +23,7 @@ export function TraceDetail() {
 
   if (isLoading && !selectedTrace) {
     return (
-      <div className="h-full flex items-center justify-center text-secondary">
+      <div className="h-full flex items-center justify-center text-slate-400">
         <p>Loading trace details...</p>
       </div>
     );
@@ -31,7 +31,7 @@ export function TraceDetail() {
 
   if (!selectedTrace) {
     return (
-      <div className="h-full flex items-center justify-center text-error">
+      <div className="h-full flex items-center justify-center text-red-400">
         <p>Trace not found</p>
       </div>
     );
@@ -73,7 +73,7 @@ export function TraceDetail() {
         <div className="flex items-center gap-3 mb-2">
           <Badge variant={statusVariant}>{selectedTrace.status}</Badge>
           <span
-            className="text-xs text-secondary font-mono cursor-pointer hover:text-primary"
+            className="text-xs text-slate-400 font-mono cursor-pointer hover:text-cyan-400"
             onClick={() => navigator.clipboard.writeText(selectedTrace.id)}
             title="Click to copy"
           >
@@ -81,11 +81,11 @@ export function TraceDetail() {
           </span>
         </div>
 
-        <h2 className="text-lg font-semibold mb-2">
+        <h2 className="text-lg font-semibold text-white mb-2">
           {selectedTrace.input_prompt}
         </h2>
 
-        <div className="flex gap-4 text-sm text-secondary">
+        <div className="flex gap-4 text-sm text-slate-400">
           <span>Started: {formatDate(selectedTrace.started_at)}</span>
           {selectedTrace.total_duration_ms > 0 && (
             <span>
@@ -101,7 +101,7 @@ export function TraceDetail() {
       {/* Operational Summary */}
       {selectedTrace.operational_summary && (
         <details className="mb-6">
-          <summary className="text-sm font-medium text-secondary cursor-pointer hover:text-primary flex items-center gap-2">
+          <summary className="text-sm font-medium text-slate-400 cursor-pointer hover:text-cyan-400 flex items-center gap-2">
             <span>Operational Summary</span>
             {selectedTrace.operational_summary.errors?.length > 0 && (
               <Badge variant="error">{selectedTrace.operational_summary.errors.length} errors</Badge>
@@ -110,53 +110,53 @@ export function TraceDetail() {
               <Badge variant="warning">{selectedTrace.operational_summary.warnings.length} warnings</Badge>
             )}
           </summary>
-          <div className="mt-3 bg-surface rounded-lg p-4 space-y-4">
+          <div className="mt-3 bg-slate-700 rounded-lg p-4 space-y-4">
             {/* Search Stats */}
             <div>
-              <h4 className="text-xs font-medium text-secondary uppercase mb-2">Searches</h4>
+              <h4 className="text-xs font-medium text-slate-400 uppercase mb-2">Searches</h4>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                <div className="bg-background rounded p-2">
-                  <div className="text-lg font-semibold text-primary">
+                <div className="bg-slate-800 rounded p-2">
+                  <div className="text-lg font-semibold text-cyan-400">
                     {selectedTrace.operational_summary.google_searches || 0}
                   </div>
-                  <div className="text-xs text-secondary">Google Searches</div>
+                  <div className="text-xs text-slate-400">Google Searches</div>
                 </div>
-                <div className="bg-background rounded p-2">
-                  <div className="text-lg font-semibold text-success">
+                <div className="bg-slate-800 rounded p-2">
+                  <div className="text-lg font-semibold text-emerald-400">
                     {selectedTrace.operational_summary.google_searches_cached || 0}
                   </div>
-                  <div className="text-xs text-secondary">Google (Cached)</div>
+                  <div className="text-xs text-slate-400">Google (Cached)</div>
                 </div>
-                <div className="bg-background rounded p-2">
-                  <div className="text-lg font-semibold text-primary">
+                <div className="bg-slate-800 rounded p-2">
+                  <div className="text-lg font-semibold text-cyan-400">
                     {selectedTrace.operational_summary.zap_searches || 0}
                   </div>
-                  <div className="text-xs text-secondary">Zap Searches</div>
+                  <div className="text-xs text-slate-400">Zap Searches</div>
                 </div>
-                <div className="bg-background rounded p-2">
-                  <div className="text-lg font-semibold text-success">
+                <div className="bg-slate-800 rounded p-2">
+                  <div className="text-lg font-semibold text-emerald-400">
                     {selectedTrace.operational_summary.zap_searches_cached || 0}
                   </div>
-                  <div className="text-xs text-secondary">Zap (Cached)</div>
+                  <div className="text-xs text-slate-400">Zap (Cached)</div>
                 </div>
               </div>
             </div>
 
             {/* Scrape Stats */}
             <div>
-              <h4 className="text-xs font-medium text-secondary uppercase mb-2">Page Scrapes</h4>
+              <h4 className="text-xs font-medium text-slate-400 uppercase mb-2">Page Scrapes</h4>
               <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="bg-background rounded p-2">
-                  <div className="text-lg font-semibold text-primary">
+                <div className="bg-slate-800 rounded p-2">
+                  <div className="text-lg font-semibold text-cyan-400">
                     {selectedTrace.operational_summary.page_scrapes || 0}
                   </div>
-                  <div className="text-xs text-secondary">Pages Scraped</div>
+                  <div className="text-xs text-slate-400">Pages Scraped</div>
                 </div>
-                <div className="bg-background rounded p-2">
-                  <div className="text-lg font-semibold text-success">
+                <div className="bg-slate-800 rounded p-2">
+                  <div className="text-lg font-semibold text-emerald-400">
                     {selectedTrace.operational_summary.page_scrapes_cached || 0}
                   </div>
-                  <div className="text-xs text-secondary">Cached</div>
+                  <div className="text-xs text-slate-400">Cached</div>
                 </div>
               </div>
             </div>
@@ -165,31 +165,31 @@ export function TraceDetail() {
             {(selectedTrace.operational_summary.prices_extracted > 0 ||
               selectedTrace.operational_summary.prices_failed > 0) && (
               <div>
-                <h4 className="text-xs font-medium text-secondary uppercase mb-2">Extractions</h4>
+                <h4 className="text-xs font-medium text-slate-400 uppercase mb-2">Extractions</h4>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                  <div className="bg-background rounded p-2">
-                    <div className="text-lg font-semibold text-success">
+                  <div className="bg-slate-800 rounded p-2">
+                    <div className="text-lg font-semibold text-emerald-400">
                       {selectedTrace.operational_summary.prices_extracted || 0}
                     </div>
-                    <div className="text-xs text-secondary">Prices Found</div>
+                    <div className="text-xs text-slate-400">Prices Found</div>
                   </div>
-                  <div className="bg-background rounded p-2">
-                    <div className="text-lg font-semibold text-error">
+                  <div className="bg-slate-800 rounded p-2">
+                    <div className="text-lg font-semibold text-red-400">
                       {selectedTrace.operational_summary.prices_failed || 0}
                     </div>
-                    <div className="text-xs text-secondary">Prices Failed</div>
+                    <div className="text-xs text-slate-400">Prices Failed</div>
                   </div>
-                  <div className="bg-background rounded p-2">
-                    <div className="text-lg font-semibold text-success">
+                  <div className="bg-slate-800 rounded p-2">
+                    <div className="text-lg font-semibold text-emerald-400">
                       {selectedTrace.operational_summary.contacts_extracted || 0}
                     </div>
-                    <div className="text-xs text-secondary">Contacts Found</div>
+                    <div className="text-xs text-slate-400">Contacts Found</div>
                   </div>
-                  <div className="bg-background rounded p-2">
-                    <div className="text-lg font-semibold text-error">
+                  <div className="bg-slate-800 rounded p-2">
+                    <div className="text-lg font-semibold text-red-400">
                       {selectedTrace.operational_summary.contacts_failed || 0}
                     </div>
-                    <div className="text-xs text-secondary">Contacts Failed</div>
+                    <div className="text-xs text-slate-400">Contacts Failed</div>
                   </div>
                 </div>
               </div>
@@ -198,14 +198,14 @@ export function TraceDetail() {
             {/* Errors */}
             {selectedTrace.operational_summary.errors?.length > 0 && (
               <div>
-                <h4 className="text-xs font-medium text-error uppercase mb-2">
+                <h4 className="text-xs font-medium text-red-400 uppercase mb-2">
                   Errors ({selectedTrace.operational_summary.errors.length})
                 </h4>
                 <div className="space-y-1 max-h-32 overflow-y-auto">
                   {selectedTrace.operational_summary.errors.map((err, i) => (
                     <div
                       key={i}
-                      className="bg-error/10 text-error text-xs p-2 rounded font-mono"
+                      className="bg-error/10 text-red-400 text-xs p-2 rounded font-mono"
                     >
                       {err}
                     </div>
@@ -217,14 +217,14 @@ export function TraceDetail() {
             {/* Warnings */}
             {selectedTrace.operational_summary.warnings?.length > 0 && (
               <div>
-                <h4 className="text-xs font-medium text-warning uppercase mb-2">
+                <h4 className="text-xs font-medium text-amber-400 uppercase mb-2">
                   Warnings ({selectedTrace.operational_summary.warnings.length})
                 </h4>
                 <div className="space-y-1 max-h-32 overflow-y-auto">
                   {selectedTrace.operational_summary.warnings.map((warn, i) => (
                     <div
                       key={i}
-                      className="bg-warning/10 text-warning text-xs p-2 rounded font-mono"
+                      className="bg-warning/10 text-amber-400 text-xs p-2 rounded font-mono"
                     >
                       {warn}
                     </div>
@@ -241,10 +241,10 @@ export function TraceDetail() {
         <div className="mb-6 p-4 bg-warning/10 border border-warning/30 rounded-lg">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-4 h-4 border-2 border-warning border-t-transparent rounded-full animate-spin" />
-            <span className="text-warning font-medium">Search in progress...</span>
+            <span className="text-amber-400 font-medium">Search in progress...</span>
           </div>
           {runningSpans.length > 0 && (
-            <div className="text-sm text-secondary">
+            <div className="text-sm text-slate-400">
               <p>Current: {runningSpans[0]?.name || 'Processing'}</p>
               {runningSpans[0]?.tool_input != null && typeof runningSpans[0].tool_input === 'object' && (
                 <p className="text-xs mt-1">
@@ -254,7 +254,7 @@ export function TraceDetail() {
             </div>
           )}
           {totalSpans > 0 && (
-            <div className="mt-2 text-xs text-secondary">
+            <div className="mt-2 text-xs text-slate-400">
               Steps completed: {completedSpans.length} / {totalSpans}
             </div>
           )}
@@ -262,12 +262,12 @@ export function TraceDetail() {
           {/* Show completed tool outputs as they come in */}
           {completedToolSpans.length > 0 && (
             <div className="mt-4 border-t border-warning/20 pt-3">
-              <p className="text-xs text-secondary mb-2">Results so far:</p>
+              <p className="text-xs text-slate-400 mb-2">Results so far:</p>
               <div className="max-h-64 overflow-y-auto space-y-2">
                 {completedToolSpans.map((span) => (
                   <div key={span.id} className="bg-background/50 rounded p-2 text-xs">
-                    <p className="text-primary font-medium mb-1">{span.name}</p>
-                    <pre className="text-secondary whitespace-pre-wrap font-mono text-[10px] max-h-32 overflow-y-auto">
+                    <p className="text-cyan-400 font-medium mb-1">{span.name}</p>
+                    <pre className="text-slate-400 whitespace-pre-wrap font-mono text-[10px] max-h-32 overflow-y-auto">
                       {formatToolOutput(span.tool_output)}
                     </pre>
                   </div>
@@ -281,8 +281,8 @@ export function TraceDetail() {
       {/* Error */}
       {selectedTrace.error && (
         <div className="mb-6">
-          <h3 className="text-sm font-medium text-error mb-2">Error</h3>
-          <div className="bg-error/10 border border-error/30 rounded-lg p-4 text-sm text-error">
+          <h3 className="text-sm font-medium text-red-400 mb-2">Error</h3>
+          <div className="bg-error/10 border border-error/30 rounded-lg p-4 text-sm text-red-400">
             {selectedTrace.error}
           </div>
         </div>
@@ -301,7 +301,7 @@ export function TraceDetail() {
       {/* Final Output - collapsed by default if we have tables */}
       {selectedTrace.final_output && (
         <details className="mb-6">
-          <summary className="text-sm font-medium text-secondary mb-2 cursor-pointer hover:text-primary">
+          <summary className="text-sm font-medium text-slate-400 mb-2 cursor-pointer hover:text-cyan-400">
             Raw Output
           </summary>
           <div className="bg-background rounded-lg p-4 text-sm whitespace-pre-wrap mt-2">

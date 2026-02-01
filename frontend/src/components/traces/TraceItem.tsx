@@ -39,9 +39,9 @@ export function TraceItem({ trace, isSelected, onClick, onDelete, childCount, is
       data-testid="trace-item"
       className={cn(
         'p-3 rounded-lg cursor-pointer transition-colors relative group',
-        'hover:bg-surface-hover',
-        isSelected ? 'bg-surface-hover border border-primary/50' : 'bg-surface',
-        trace.status === 'running' && 'border-l-2 border-l-warning',
+        'hover:bg-slate-700',
+        isSelected ? 'bg-slate-700 border border-cyan-500/50' : 'bg-slate-800',
+        trace.status === 'running' && 'border-l-2 border-l-amber-500',
         isChild && 'py-2 text-sm'  // Smaller padding for child traces
       )}
       onClick={onClick}
@@ -49,7 +49,7 @@ export function TraceItem({ trace, isSelected, onClick, onDelete, childCount, is
       {/* Delete button */}
       <button
         onClick={handleDelete}
-        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-error/20 rounded text-error text-xs"
+        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-red-500/20 rounded text-red-400 text-xs"
         title="Delete trace"
       >
         ✕
@@ -67,15 +67,15 @@ export function TraceItem({ trace, isSelected, onClick, onDelete, childCount, is
             )}
           </Badge>
           {isChild && (
-            <span className="text-xs text-secondary italic">refinement</span>
+            <span className="text-xs text-slate-400 italic">refinement</span>
           )}
           {childCount && childCount > 0 && (
-            <span className="text-xs text-secondary">
+            <span className="text-xs text-slate-400">
               +{childCount} refinement{childCount > 1 ? 's' : ''}
             </span>
           )}
         </div>
-        <span className="text-xs text-secondary">
+        <span className="text-xs text-slate-400">
           {formatDate(trace.started_at)}
         </span>
       </div>
@@ -84,10 +84,10 @@ export function TraceItem({ trace, isSelected, onClick, onDelete, childCount, is
         {truncate(trace.input_prompt, isChild ? 60 : 80)}
       </p>
 
-      <div className="flex items-center gap-3 text-xs text-secondary">
+      <div className="flex items-center gap-3 text-xs text-slate-400">
         <span className="font-mono">{trace.id.substring(0, 8)}</span>
         {trace.status === 'running' && runningSpans.length > 0 && (
-          <span className="text-warning animate-pulse">
+          <span className="text-amber-400 animate-pulse">
             {runningSpans[0]?.name || 'Processing...'}
           </span>
         )}

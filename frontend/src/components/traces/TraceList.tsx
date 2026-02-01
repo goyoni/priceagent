@@ -84,7 +84,7 @@ export function TraceList() {
 
   if (error) {
     return (
-      <div className="p-4 text-center text-error">
+      <div className="p-4 text-center text-red-400">
         <p>Error loading traces</p>
         <p className="text-sm">{error}</p>
       </div>
@@ -93,7 +93,7 @@ export function TraceList() {
 
   if (isLoading && (!traces || traces.length === 0)) {
     return (
-      <div className="p-4 text-center text-secondary">
+      <div className="p-4 text-center text-slate-400">
         <p>Loading traces...</p>
       </div>
     );
@@ -101,7 +101,7 @@ export function TraceList() {
 
   if (!traces || traces.length === 0) {
     return (
-      <div className="p-8 text-center text-secondary">
+      <div className="p-8 text-center text-slate-400">
         <p className="text-lg mb-2">No traces yet</p>
         <p className="text-sm">Run a search to see traces here</p>
       </div>
@@ -121,7 +121,7 @@ export function TraceList() {
               {hasChildren && (
                 <button
                   onClick={() => toggleExpanded(trace.id)}
-                  className="mt-3 p-1 text-secondary hover:text-primary transition-colors text-xs"
+                  className="mt-3 p-1 text-slate-400 hover:text-cyan-400 transition-colors text-xs"
                   title={isExpanded ? 'Collapse' : 'Expand'}
                 >
                   {isExpanded ? '▼' : '▶'}
@@ -142,7 +142,7 @@ export function TraceList() {
 
             {/* Nested child traces */}
             {hasChildren && isExpanded && (
-              <div className="ml-6 mt-1 space-y-1 border-l-2 border-gray-300 pl-2">
+              <div className="ml-6 mt-1 space-y-1 border-l-2 border-slate-600 pl-2">
                 {trace.child_traces!.map((child) => (
                   <TraceItem
                     key={child.id}
