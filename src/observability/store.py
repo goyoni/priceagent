@@ -266,7 +266,8 @@ class TraceStore:
         message = event.model_dump_json()
         disconnected = set()
 
-        for ws in self._websockets:
+        # Iterate over a copy to avoid "Set changed size during iteration"
+        for ws in list(self._websockets):
             try:
                 await ws.send_text(message)
             except Exception:
