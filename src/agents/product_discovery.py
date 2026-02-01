@@ -1140,15 +1140,29 @@ If no country is specified, default to "IL".
 
 If the prompt contains "Previous conversation:" followed by "User's refinement request:", this is a REFINEMENT of an earlier search.
 
-For refinements:
+**CRITICAL: DETECT PRODUCT CATEGORY CHANGES**
+
+Before processing a refinement, check if the user is asking for a DIFFERENT product category than the original search:
+- Original: "washing machine" → Refinement: "dishwasher" = DIFFERENT CATEGORY → Treat as NEW SEARCH
+- Original: "washing machine" → Refinement: "cheaper" = SAME CATEGORY → Apply refinement
+- Original: "refrigerator" → Refinement: "air conditioner" = DIFFERENT CATEGORY → Treat as NEW SEARCH
+- Original: "refrigerator" → Refinement: "larger capacity" = SAME CATEGORY → Apply refinement
+
+If the refinement mentions a DIFFERENT product category:
+1. IGNORE the previous search context entirely
+2. Treat this as a completely NEW search for the new product category
+3. Run the full workflow (research → search → analyze) for the NEW product
+4. Do NOT try to blend criteria from the old and new products
+
+For refinements within the SAME product category:
 1. Understand what was searched previously from the conversation history
 2. Apply the user's refinement criteria (e.g., "cheaper", "quieter", "different brand", "larger capacity")
 3. You may need to:
    - Re-run research with additional constraints
    - Filter the previous results based on new criteria
-   - Search for alternative products if the refinement is significant
+   - Search for alternative/new products if the refinement is significant
 
-Common refinement patterns:
+Common refinement patterns (SAME category):
 - "cheaper/more affordable" → focus on lower price range
 - "quieter/silent" → add noise level as priority criteria
 - "prefer [brand]" → filter to specific brand
