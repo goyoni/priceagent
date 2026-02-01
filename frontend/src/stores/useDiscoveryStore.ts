@@ -260,6 +260,9 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
 
   // Load discovery results from a past trace
   loadFromTrace: async (traceId: string, query: string) => {
+    // Generate new session for continuing the conversation
+    const newSessionId = `session_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+
     set({
       isSearching: true,
       isLoadingFromHistory: true,  // Flag to prevent WebSocket from connecting
@@ -271,9 +274,10 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
       criteriaFeedback: [],
       query,
       currentTraceId: traceId,
+      originalTraceId: traceId,  // Set original trace for conversation linking
       statusMessage: 'Loading previous results...',
       messages: [],
-      sessionId: null,
+      sessionId: newSessionId,
     });
 
     try {
@@ -307,6 +311,25 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
 
       console.log('[Discovery] Parsed', discoveryResponse.products.length, 'products from trace');
 
+      // Create conversation messages from loaded data
+      const userMessage: ConversationMessage = {
+        id: `msg_${Date.now()}_user`,
+        role: 'user',
+        content: query,
+        timestamp: Date.now() - 1000,  // Slightly in the past
+      };
+
+      const assistantMessage: ConversationMessage = {
+        id: `msg_${Date.now()}_assistant`,
+        role: 'assistant',
+        content: discoveryResponse.products.length > 0
+          ? `Found ${discoveryResponse.products.length} product${discoveryResponse.products.length === 1 ? '' : 's'} matching your criteria.`
+          : discoveryResponse.no_results_message || 'No products found.',
+        timestamp: Date.now(),
+        traceId,
+        productsSnapshot: discoveryResponse.products,
+      };
+
       set({
         products: discoveryResponse.products,
         searchSummary: discoveryResponse.search_summary || null,
@@ -316,6 +339,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
         isSearching: false,
         isLoadingFromHistory: false,
         statusMessage: null,
+        messages: [userMessage, assistantMessage],  // Initialize conversation
       });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to load';
@@ -324,6 +348,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
         isSearching: false,
         isLoadingFromHistory: false,
         statusMessage: null,
+        sessionId: null,  // Clear session on error
       });
     }
   },
