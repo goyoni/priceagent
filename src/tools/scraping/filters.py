@@ -120,7 +120,7 @@ def normalize_price_for_comparison(price: float, currency: str = "ILS") -> float
 
 
 def deduplicate_results(
-    results: list, price_bucket_size: float = 50.0, min_price: float = 50.0
+    results: list, price_bucket_size: float = 150.0, min_price: float = 20.0
 ) -> list:
     """Deduplicate search results by seller and price bucket.
 

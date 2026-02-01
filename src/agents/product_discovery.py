@@ -659,7 +659,7 @@ async def _search_products_smart_impl(
     model_searches = [m.get("model") for m in recommended_models if m.get("model")]
     model_searches.extend(search_terms.get("model_searches", []))
 
-    for model in model_searches[:5]:  # Limit model searches
+    for model in model_searches[:10]:  # Search up to 10 models
         await report_progress(
             "🔍 Model search",
             f"Looking for: {model}"
@@ -669,7 +669,7 @@ async def _search_products_smart_impl(
 
         for scraper in scrapers:
             try:
-                results = await scraper.search(model, max_results=5)
+                results = await scraper.search(model, max_results=8)
                 await record_search(scraper.name, cached=False)
 
                 if results:
@@ -689,7 +689,7 @@ async def _search_products_smart_impl(
     # Strategy 2: Search using native language terms
     native_terms = search_terms.get("native_language", search_terms.get("local_language", []))
 
-    for term in native_terms[:3]:
+    for term in native_terms[:5]:  # Search up to 5 native language terms
         await report_progress(
             "🔍 Local search",
             f"Searching: {term}"
@@ -699,7 +699,7 @@ async def _search_products_smart_impl(
 
         for scraper in scrapers:
             try:
-                results = await scraper.search(term, max_results=max_results // 3)
+                results = await scraper.search(term, max_results=max(8, max_results // 2))
                 await record_search(scraper.name, cached=False)
 
                 if results:
@@ -719,7 +719,7 @@ async def _search_products_smart_impl(
     # Strategy 3: Category searches
     category_terms = search_terms.get("category_searches", [])
 
-    for term in category_terms[:2]:
+    for term in category_terms[:4]:  # Search up to 4 category terms
         await report_progress(
             "🔍 Category search",
             f"Searching: {term}"
@@ -729,7 +729,7 @@ async def _search_products_smart_impl(
 
         for scraper in scrapers:
             try:
-                results = await scraper.search(term, max_results=max_results // 3)
+                results = await scraper.search(term, max_results=max(8, max_results // 2))
                 await record_search(scraper.name, cached=False)
 
                 if results:
@@ -1001,7 +1001,7 @@ Output:
 }}
 
 IMPORTANT:
-- Include 5 best matching products (or all available if fewer than 5)
+- Include 10 best matching products (or all available if fewer than 10)
 - NEVER return empty products if there are products available - adapt criteria instead
 - If a product matches a recommended model, prioritize it
 - Be honest about what can't be verified from the product name
@@ -1056,7 +1056,7 @@ IMPORTANT:
         timestamp = int(time.time() * 1000)
         fallback_products = []
 
-        for i, p in enumerate(products[:5]):
+        for i, p in enumerate(products[:10]):
             fallback_products.append({
                 "id": f"prod_{timestamp}_{i}",
                 "name": p.get("name", "Unknown"),
