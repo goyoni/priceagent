@@ -874,7 +874,7 @@ Output:
 }}
 
 IMPORTANT:
-- Include 3-5 best matching products
+- Include 5 best matching products (or all available if fewer than 5)
 - NEVER return empty products if there are products available - adapt criteria instead
 - If a product matches a recommended model, prioritize it
 - Be honest about what can't be verified from the product name
