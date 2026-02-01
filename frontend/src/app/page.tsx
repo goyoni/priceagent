@@ -174,6 +174,11 @@ function SearchPageContent() {
     // Always clear trace param when switching tabs - each tab has its own trace context
     params.delete('trace');
     router.push(`/?${params.toString()}`, { scroll: false });
+
+    // Clear discovery results when switching to discover tab
+    if (tab === 'discover') {
+      clearDiscoveryResults();
+    }
   };
 
   // Sync tab with URL changes
@@ -201,6 +206,7 @@ function SearchPageContent() {
     loadHistory: loadDiscoveryHistory,
     loadFromTrace: loadDiscoveryFromTrace,
     deleteFromHistory: deleteDiscoveryHistoryItem,
+    clearResults: clearDiscoveryResults,
   } = useDiscoveryStore();
 
   const [query, setQuery] = useState('');
