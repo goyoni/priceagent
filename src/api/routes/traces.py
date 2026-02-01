@@ -2,37 +2,72 @@
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
-from typing import List
+from typing import List, Optional
 
 from src.observability import get_trace_store
 
 router = APIRouter(prefix="/traces", tags=["traces"])
 
 
-@router.get("/")
-async def list_traces(limit: int = 50):
-    """List recent traces with summary stats."""
-    store = get_trace_store()
-    traces = store.get_traces(limit=limit)
+def _trace_to_dict(t, truncate_prompt: bool = True) -> dict:
+    """Convert a trace to a dictionary representation."""
+    prompt = t.input_prompt
+    if truncate_prompt and len(prompt) > 100:
+        prompt = prompt[:100] + "..."
+
     return {
-        "traces": [
-            {
-                "id": t.id,
-                "session_id": t.session_id,
-                "parent_trace_id": t.parent_trace_id,
-                "input_prompt": t.input_prompt[:100] + "..." if len(t.input_prompt) > 100 else t.input_prompt,
-                "status": t.status.value,
-                "started_at": t.started_at.isoformat(),
-                "ended_at": t.ended_at.isoformat() if t.ended_at else None,
-                "total_duration_ms": t.total_duration_ms,
-                "total_tokens": t.total_tokens,
-                "total_input_tokens": t.total_input_tokens,
-                "total_output_tokens": t.total_output_tokens,
-                "error": t.error,
-            }
-            for t in traces
-        ]
+        "id": t.id,
+        "session_id": t.session_id,
+        "parent_trace_id": t.parent_trace_id,
+        "input_prompt": prompt,
+        "status": t.status.value,
+        "started_at": t.started_at.isoformat(),
+        "ended_at": t.ended_at.isoformat() if t.ended_at else None,
+        "total_duration_ms": t.total_duration_ms,
+        "total_tokens": t.total_tokens,
+        "total_input_tokens": t.total_input_tokens,
+        "total_output_tokens": t.total_output_tokens,
+        "error": t.error,
     }
+
+
+@router.get("/")
+async def list_traces(limit: int = 50, include_children: bool = True):
+    """List recent traces with summary stats.
+
+    By default, child traces are nested under their parent traces.
+    Only root traces (without parent_trace_id) appear at the top level.
+    """
+    store = get_trace_store()
+    traces = store.get_traces(limit=limit * 2)  # Get more to account for children
+
+    # Separate parent and child traces
+    parent_traces = []
+    children_by_parent: dict[str, list] = {}
+
+    for t in traces:
+        if t.parent_trace_id:
+            # This is a child trace
+            if t.parent_trace_id not in children_by_parent:
+                children_by_parent[t.parent_trace_id] = []
+            children_by_parent[t.parent_trace_id].append(t)
+        else:
+            # This is a parent/root trace
+            parent_traces.append(t)
+
+    # Build response with nested children
+    result = []
+    for t in parent_traces[:limit]:
+        trace_dict = _trace_to_dict(t)
+        if include_children and t.id in children_by_parent:
+            trace_dict["child_traces"] = [
+                _trace_to_dict(child) for child in children_by_parent[t.id]
+            ]
+        else:
+            trace_dict["child_traces"] = []
+        result.append(trace_dict)
+
+    return {"traces": result}
 
 
 @router.get("/running")

@@ -4,7 +4,7 @@
 
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useTraceStore } from '@/stores/useTraceStore';
 import { TraceItem } from './TraceItem';
@@ -12,6 +12,7 @@ import { TraceItem } from './TraceItem';
 export function TraceList() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [expandedTraces, setExpandedTraces] = useState<Set<string>>(new Set());
 
   const {
     traces,
@@ -33,6 +34,19 @@ export function TraceList() {
     const params = new URLSearchParams(searchParams.toString());
     params.set('trace', traceId);
     router.push(`/dashboard?${params.toString()}`, { scroll: false });
+  };
+
+  // Toggle expanded state for traces with children
+  const toggleExpanded = (traceId: string) => {
+    setExpandedTraces(prev => {
+      const next = new Set(prev);
+      if (next.has(traceId)) {
+        next.delete(traceId);
+      } else {
+        next.add(traceId);
+      }
+      return next;
+    });
   };
 
   // Read trace from URL on mount
@@ -96,15 +110,54 @@ export function TraceList() {
 
   return (
     <div className="space-y-2 p-2">
-      {traces.map((trace) => (
-        <TraceItem
-          key={trace.id}
-          trace={trace}
-          isSelected={trace.id === selectedTraceId}
-          onClick={() => handleSelectTrace(trace.id)}
-          onDelete={() => deleteTrace(trace.id)}
-        />
-      ))}
+      {traces.map((trace) => {
+        const hasChildren = trace.child_traces && trace.child_traces.length > 0;
+        const isExpanded = expandedTraces.has(trace.id);
+
+        return (
+          <div key={trace.id}>
+            <div className="flex items-start gap-1">
+              {/* Expand/collapse button for traces with children */}
+              {hasChildren && (
+                <button
+                  onClick={() => toggleExpanded(trace.id)}
+                  className="mt-3 p-1 text-secondary hover:text-primary transition-colors text-xs"
+                  title={isExpanded ? 'Collapse' : 'Expand'}
+                >
+                  {isExpanded ? '▼' : '▶'}
+                </button>
+              )}
+              {!hasChildren && <div className="w-5" />}
+
+              <div className="flex-1">
+                <TraceItem
+                  trace={trace}
+                  isSelected={trace.id === selectedTraceId}
+                  onClick={() => handleSelectTrace(trace.id)}
+                  onDelete={() => deleteTrace(trace.id)}
+                  childCount={trace.child_traces?.length}
+                />
+              </div>
+            </div>
+
+            {/* Nested child traces */}
+            {hasChildren && isExpanded && (
+              <div className="ml-6 mt-1 space-y-1 border-l-2 border-gray-300 pl-2">
+                {trace.child_traces!.map((child) => (
+                  <TraceItem
+                    key={child.id}
+                    trace={child}
+                    isSelected={child.id === selectedTraceId}
+                    onClick={() => handleSelectTrace(child.id)}
+                    onDelete={() => deleteTrace(child.id)}
+                    isChild
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

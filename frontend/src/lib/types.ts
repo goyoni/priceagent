@@ -90,6 +90,7 @@ export interface Trace {
   error?: string;
   spans: Span[];
   operational_summary?: OperationalSummary;
+  child_traces?: Trace[];  // Nested child traces (refinements)
 }
 
 export interface TraceListResponse {

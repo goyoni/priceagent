@@ -206,8 +206,9 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
 
   // Called when WebSocket receives results
   setSearchComplete: (response: DiscoveryResponse) => {
-    const { query, currentTraceId } = get();
+    const { query, currentTraceId, originalTraceId } = get();
     const products = response.products || [];
+    const isRefinement = originalTraceId && currentTraceId !== originalTraceId;
 
     // Create assistant message for the conversation
     const assistantContent = products.length > 0
@@ -223,8 +224,8 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
       productsSnapshot: products,
     };
 
-    // Add to history if we have products or if search was completed
-    if (query) {
+    // Add to history only for original searches (not refinements)
+    if (query && !isRefinement) {
       const historyItem = addToDiscoveryHistory({
         query,
         timestamp: Date.now(),

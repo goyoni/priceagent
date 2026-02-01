@@ -12,9 +12,11 @@ interface TraceItemProps {
   isSelected: boolean;
   onClick: () => void;
   onDelete: () => void;
+  childCount?: number;  // Number of child traces (refinements)
+  isChild?: boolean;    // Whether this is a child trace
 }
 
-export function TraceItem({ trace, isSelected, onClick, onDelete }: TraceItemProps) {
+export function TraceItem({ trace, isSelected, onClick, onDelete, childCount, isChild }: TraceItemProps) {
   const statusVariant =
     trace.status === 'completed'
       ? 'success'
@@ -39,7 +41,8 @@ export function TraceItem({ trace, isSelected, onClick, onDelete }: TraceItemPro
         'p-3 rounded-lg cursor-pointer transition-colors relative group',
         'hover:bg-surface-hover',
         isSelected ? 'bg-surface-hover border border-primary/50' : 'bg-surface',
-        trace.status === 'running' && 'border-l-2 border-l-warning'
+        trace.status === 'running' && 'border-l-2 border-l-warning',
+        isChild && 'py-2 text-sm'  // Smaller padding for child traces
       )}
       onClick={onClick}
     >
@@ -53,22 +56,32 @@ export function TraceItem({ trace, isSelected, onClick, onDelete }: TraceItemPro
       </button>
 
       <div className="flex items-start justify-between gap-2 mb-2 pr-6">
-        <Badge variant={statusVariant}>
-          {trace.status === 'running' ? (
-            <span className="flex items-center gap-1">
-              <span className="animate-pulse">●</span> Running
-            </span>
-          ) : (
-            trace.status
+        <div className="flex items-center gap-2">
+          <Badge variant={statusVariant}>
+            {trace.status === 'running' ? (
+              <span className="flex items-center gap-1">
+                <span className="animate-pulse">●</span> Running
+              </span>
+            ) : (
+              trace.status
+            )}
+          </Badge>
+          {isChild && (
+            <span className="text-xs text-secondary italic">refinement</span>
           )}
-        </Badge>
+          {childCount && childCount > 0 && (
+            <span className="text-xs text-secondary">
+              +{childCount} refinement{childCount > 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
         <span className="text-xs text-secondary">
           {formatDate(trace.started_at)}
         </span>
       </div>
 
-      <p className="text-sm text-white mb-2">
-        {truncate(trace.input_prompt, 80)}
+      <p className={cn("text-white mb-2", isChild ? "text-xs" : "text-sm")}>
+        {truncate(trace.input_prompt, isChild ? 60 : 80)}
       </p>
 
       <div className="flex items-center gap-3 text-xs text-secondary">
