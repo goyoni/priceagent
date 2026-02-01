@@ -35,6 +35,48 @@ COUNTRY_LANGUAGES = {
     "FR": {"language": "French", "code": "fr", "currency": "€", "currency_name": "EUR"},
 }
 
+# Product type translations for common appliances
+PRODUCT_TRANSLATIONS = {
+    "he": {
+        "refrigerator": "מקרר",
+        "fridge": "מקרר",
+        "washing machine": "מכונת כביסה",
+        "dishwasher": "מדיח כלים",
+        "air conditioner": "מזגן",
+        "oven": "תנור",
+        "dryer": "מייבש כביסה",
+        "microwave": "מיקרוגל",
+        "freezer": "מקפיא",
+        "vacuum": "שואב אבק",
+        "tv": "טלוויזיה",
+        "television": "טלוויזיה",
+        "laptop": "מחשב נייד",
+        "phone": "טלפון",
+        "quiet": "שקט",
+        "silent": "שקט",
+        "family": "משפחה",
+        "large": "גדול",
+        "small": "קטן",
+        "energy efficient": "חסכוני באנרגיה",
+    },
+    "de": {
+        "refrigerator": "Kühlschrank",
+        "fridge": "Kühlschrank",
+        "washing machine": "Waschmaschine",
+        "dishwasher": "Geschirrspüler",
+        "quiet": "leise",
+        "silent": "leise",
+    },
+    "fr": {
+        "refrigerator": "réfrigérateur",
+        "fridge": "réfrigérateur",
+        "washing machine": "lave-linge",
+        "dishwasher": "lave-vaisselle",
+        "quiet": "silencieux",
+        "silent": "silencieux",
+    },
+}
+
 
 def get_country_info(country: str) -> dict:
     """Get language and currency info for a country."""
@@ -44,6 +86,28 @@ def get_country_info(country: str) -> dict:
         "currency": "$",
         "currency_name": "USD"
     })
+
+
+def translate_query_to_native(query: str, lang_code: str) -> str:
+    """Translate an English query to the native language using word-level translation.
+
+    This ensures searches are performed in the local language even if
+    the user typed in English.
+    """
+    if lang_code == "en" or lang_code not in PRODUCT_TRANSLATIONS:
+        return query
+
+    translations = PRODUCT_TRANSLATIONS[lang_code]
+    translated = query.lower()
+
+    # Sort by length (longest first) to avoid partial replacements
+    sorted_terms = sorted(translations.keys(), key=len, reverse=True)
+
+    for eng_term in sorted_terms:
+        if eng_term in translated:
+            translated = translated.replace(eng_term, translations[eng_term])
+
+    return translated
 
 
 def get_openai_client() -> AsyncOpenAI:
@@ -158,15 +222,17 @@ async def _research_and_discover_impl(
 
         research_summary = json.dumps(research_data, indent=2, ensure_ascii=False)
 
-        system_prompt = f"""You are a product research expert helping users in {country_info['currency_name']} find the right products.
+        system_prompt = f"""You are a product research expert helping users in {country} find the right products.
 Your task is to analyze research data and extract:
-1. REALISTIC, research-backed criteria (not arbitrary numbers)
+1. MARKET-REALISTIC criteria based on what's actually available in {country}
 2. Specific product models that experts recommend
 3. Price expectations in local currency ({currency})
 
-IMPORTANT GUIDELINES:
-- Criteria must be based on actual industry standards, not guesses
-- For noise levels: Research what decibel ranges are considered "quiet" for this product category
+CRITICAL - MARKET REALITY:
+- Research what products are ACTUALLY AVAILABLE in {country}, not ideal specs
+- For noise levels: Find the TYPICAL range in the local market. If most fridges in {country} are 42-46dB, then 42dB IS "quiet" for that market
+- Set "ideal_value" as the user's wish and "market_value" as what's realistically available
+- Include "market_context" explaining the local reality (e.g., "In Israel, refrigerators typically range 42-46dB, with 42dB being the quietest available")
 - For capacity: Research actual recommendations for the use case (e.g., family size)
 - Include specific model numbers when mentioned in research
 - Prices must be in {currency} ({country_info['currency_name']})
@@ -186,10 +252,12 @@ Based on this research, provide:
   "criteria": [
     {{
       "attribute": "attribute name",
-      "value": "specific value with unit",
-      "source": "where this came from (research/industry standard/expert recommendation)",
-      "confidence": "high/medium/low",
-      "explanation": "why this value for the user's needs"
+      "ideal_value": "what user ideally wants",
+      "market_value": "what's realistically available in {country}",
+      "market_context": "explanation of local market reality",
+      "is_flexible": true/false,
+      "source": "where this came from",
+      "confidence": "high/medium/low"
     }}
   ],
   "recommended_models": [
@@ -201,9 +269,9 @@ Based on this research, provide:
     }}
   ],
   "search_terms": {{
-    "local_language": ["search terms in {language}"],
+    "native_language": ["search terms in {language} - ALWAYS include native language terms"],
     "model_searches": ["specific model searches"],
-    "category_searches": ["category + feature searches"]
+    "category_searches": ["category + feature searches in {language}"]
   }},
   "price_range": {{
     "min": number,
@@ -212,7 +280,7 @@ Based on this research, provide:
     "source": "where this estimate comes from"
   }},
   "research_quality": "good/moderate/limited",
-  "notes": "any important notes about the research or criteria"
+  "market_notes": "important notes about the {country} market for this product category"
 }}"""
 
         response = await client.chat.completions.create(
@@ -283,8 +351,14 @@ Based on this research, provide:
 
 
 def _generate_research_queries(requirement: str, language: str, lang_code: str) -> list:
-    """Generate research queries in the user's language."""
+    """Generate research queries in the user's native language.
+
+    Always generates queries in the native language, even if user typed in English.
+    """
     queries = []
+
+    # Translate the requirement to native language
+    native_requirement = translate_query_to_native(requirement, lang_code)
 
     # Hebrew-specific queries for Israel
     if lang_code == "he":
@@ -327,17 +401,37 @@ def _generate_research_queries(requirement: str, language: str, lang_code: str) 
                     "purpose": "Buying guide - what matters",
                     "category": "buying_guides"
                 },
+                # Market reality queries
+                {
+                    "query": f"רמת רעש {hebrew_product} בישראל טווח dB",
+                    "purpose": "Market noise level range",
+                    "category": "buying_guides"
+                },
+            ])
+        else:
+            # Use translated requirement
+            queries.extend([
+                {
+                    "query": f"{native_requirement} מומלץ 2024",
+                    "purpose": "Finding recommended models",
+                    "category": "product_recommendations"
+                },
+                {
+                    "query": f"{native_requirement} ביקורות המלצות",
+                    "purpose": "Reviews and recommendations",
+                    "category": "expert_opinions"
+                },
             ])
 
         # Also add English queries for international research
         queries.append({
-            "query": f"best quiet {requirement} buying guide specifications",
+            "query": f"best quiet {requirement} specifications decibel range",
             "purpose": "International expert opinions",
             "category": "expert_opinions"
         })
 
     else:
-        # English queries
+        # English or other language queries
         queries.extend([
             {
                 "query": f"best {requirement} 2024 reviews recommendations",
@@ -345,8 +439,13 @@ def _generate_research_queries(requirement: str, language: str, lang_code: str) 
                 "category": "product_recommendations"
             },
             {
-                "query": f"{requirement} buying guide what to look for",
+                "query": f"{requirement} buying guide what to look for specifications",
                 "purpose": "Buying guide criteria",
+                "category": "buying_guides"
+            },
+            {
+                "query": f"{requirement} noise level decibel range typical",
+                "purpose": "Market noise level reality",
                 "category": "buying_guides"
             },
             {
@@ -452,10 +551,10 @@ async def _search_products_smart_impl(
 
         search_attempts.append(attempt)
 
-    # Strategy 2: Search using local language terms
-    local_terms = search_terms.get("local_language", [])
+    # Strategy 2: Search using native language terms
+    native_terms = search_terms.get("native_language", search_terms.get("local_language", []))
 
-    for term in local_terms[:3]:
+    for term in native_terms[:3]:
         await report_progress(
             "🔍 Local search",
             f"Searching: {term}"
@@ -611,6 +710,21 @@ async def _analyze_and_format_results_impl(
     country_info = get_country_info(country)
 
     # Build search summary (always included)
+    # Include market context from criteria
+    market_notes = research.get("market_notes", "")
+    criteria_with_context = []
+    for c in criteria:
+        criterion_text = f"• {c.get('attribute')}: "
+        if c.get('market_value'):
+            criterion_text += f"{c.get('market_value')} (market reality)"
+            if c.get('market_context'):
+                criterion_text += f" - {c.get('market_context')}"
+        elif c.get('value'):
+            criterion_text += f"{c.get('value')} ({c.get('source', 'research')})"
+        else:
+            criterion_text += f"{c.get('ideal_value', 'N/A')}"
+        criteria_with_context.append(criterion_text)
+
     search_summary = {
         "original_requirement": original_requirement,
         "category": category,
@@ -620,7 +734,7 @@ async def _analyze_and_format_results_impl(
         "search_attempts": search_results.get("search_attempts", []),
         "total_products_found": len(products),
         "research_quality": research.get("research_quality", "unknown"),
-        "notes": research.get("notes", ""),
+        "market_notes": market_notes,
     }
 
     # If no products found, return helpful response
@@ -642,18 +756,26 @@ async def _analyze_and_format_results_impl(
             "search_summary": search_summary,
             "no_results_message": f"No products found matching '{original_requirement}'",
             "suggestions": suggestions,
-            "criteria_feedback": [
-                f"• {c.get('attribute')}: {c.get('value')} ({c.get('source', 'research')})"
-                for c in criteria
-            ],
+            "criteria_feedback": criteria_with_context,
+            "market_notes": market_notes,
         }, indent=2, ensure_ascii=False)
 
-    # Analyze products with LLM
+    # Analyze products with LLM - using ADAPTIVE FILTERING
     try:
         client = get_openai_client()
 
-        system_prompt = f"""You are a product analyst. Score products against the given criteria.
-For each product, determine how well it matches and explain why.
+        system_prompt = f"""You are a product analyst using ADAPTIVE FILTERING.
+
+Your job is to:
+1. Score ALL products against criteria
+2. If strict criteria eliminate all products, RELAX criteria based on market reality
+3. Always return the BEST AVAILABLE products, even if they don't perfectly match
+
+ADAPTIVE FILTERING RULES:
+- If criteria specify "< 40dB" but best available is 42dB, accept 42dB as "best in market"
+- Explain the adaptation: "While you requested <40dB, the quietest available in {country} is 42dB"
+- Prioritize products that are relatively best, not just those matching absolute criteria
+- Include market_reality_note explaining any adaptations made
 
 Currency for prices: {country_info['currency']} ({country_info['currency_name']})
 
@@ -661,16 +783,21 @@ Respond with valid JSON only."""
 
         user_prompt = f"""Analyze these products for: "{original_requirement}"
 
-CRITERIA:
+CRITERIA (may include market context):
 {json.dumps(criteria, indent=2, ensure_ascii=False)}
+
+MARKET NOTES:
+{market_notes}
 
 RECOMMENDED MODELS FROM RESEARCH:
 {json.dumps(recommended_models, indent=2, ensure_ascii=False)}
 
-PRODUCTS FOUND:
-{json.dumps(products[:15], indent=2, ensure_ascii=False)}
+PRODUCTS FOUND ({len(products)} total):
+{json.dumps(products[:20], indent=2, ensure_ascii=False)}
 
-Score each product and output:
+Use ADAPTIVE FILTERING - return best available products even if they don't perfectly match criteria.
+
+Output:
 {{
   "products": [
     {{
@@ -683,20 +810,25 @@ Score each product and output:
       "price_range": "{country_info['currency']}X,XXX",
       "criteria_match": {{
         "matched": ["which criteria this product meets"],
+        "adapted": ["criteria relaxed due to market reality"],
         "unknown": ["criteria that can't be verified"],
         "unmet": ["criteria definitely not met"]
       }},
       "match_score": "high/medium/low",
-      "why_recommended": "explanation referencing the original requirement and criteria"
+      "why_recommended": "explanation - if adapted, explain why this is the best available option",
+      "market_reality_note": "optional - explain any criteria adaptation (e.g., 'Quietest available in Israel at 42dB')"
     }}
-  ]
+  ],
+  "filtering_notes": "explain any adaptive filtering applied (e.g., 'Relaxed noise criteria from <40dB to <43dB as no products under 40dB available in Israel')"
 }}
 
 IMPORTANT:
 - Include 3-5 best matching products
+- NEVER return empty products if there are products available - adapt criteria instead
 - If a product matches a recommended model, prioritize it
 - Be honest about what can't be verified from the product name
-- Price should use {country_info['currency']} symbol"""
+- Price should use {country_info['currency']} symbol
+- Add market_reality_note when criteria were adapted"""
 
         response = await client.chat.completions.create(
             model="gpt-4o",
@@ -724,6 +856,10 @@ IMPORTANT:
             # Ensure key_specs is a list
             if not isinstance(product.get("key_specs"), list):
                 product["key_specs"] = []
+
+        # Add filtering notes to search summary if criteria were adapted
+        if result.get("filtering_notes"):
+            search_summary["filtering_notes"] = result["filtering_notes"]
 
         result["search_summary"] = search_summary
 
