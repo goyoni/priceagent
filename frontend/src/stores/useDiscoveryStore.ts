@@ -128,6 +128,9 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
       statusMessage: 'Starting product discovery...',
       messages: [userMessage],
       sessionId: newSessionId,
+      // Reset trace IDs to ensure new search is not treated as refinement
+      currentTraceId: null,
+      originalTraceId: null,
     });
 
     try {
@@ -210,6 +213,14 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
     const products = response.products || [];
     const isRefinement = originalTraceId && currentTraceId !== originalTraceId;
 
+    console.log('[Discovery] setSearchComplete:', {
+      query,
+      currentTraceId,
+      originalTraceId,
+      isRefinement,
+      productCount: products.length,
+    });
+
     // Create assistant message for the conversation
     const assistantContent = products.length > 0
       ? `Found ${products.length} product${products.length === 1 ? '' : 's'} matching your criteria.`
@@ -226,6 +237,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
 
     // Add to history only for original searches (not refinements)
     if (query && !isRefinement) {
+      console.log('[Discovery] Adding to history:', query);
       const historyItem = addToDiscoveryHistory({
         query,
         timestamp: Date.now(),
@@ -245,6 +257,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
         messages: [...state.messages, assistantMessage],
       }));
     } else {
+      console.log('[Discovery] Not adding to history - isRefinement:', isRefinement, 'query:', !!query);
       set((state) => ({
         products,
         searchSummary: response.search_summary || null,
