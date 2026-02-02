@@ -74,6 +74,16 @@ pytest tests/unit/
 pytest --cov=src --cov-report=html
 ```
 
+### Build Verification
+**IMPORTANT: Always build and test before reporting completion.**
+
+Before marking any task as complete:
+1. Run `cd frontend && npm run build` to verify TypeScript compiles
+2. Run `pytest` to ensure all tests pass
+3. Fix any errors before proceeding
+
+Never report a task as complete without verifying the build succeeds.
+
 ---
 
 ## Code Architecture
