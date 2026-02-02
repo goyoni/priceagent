@@ -14,6 +14,7 @@ import {
   SearchHistoryItem,
   getSearchHistory,
   addToSearchHistory,
+  updateSearchHistoryByTraceId,
   deleteFromHistory,
   clearSearchHistory,
   formatRelativeTime,
@@ -766,6 +767,17 @@ function SearchPageContent() {
 
       const { trace_id } = await response.json();
 
+      // Add to history immediately with 'searching' status
+      const searchingHistoryItem = addToSearchHistory({
+        query,
+        timestamp: Date.now(),
+        resultCount: 0,
+        searchTimeMs: 0,
+        traceId: trace_id,
+        status: 'searching',
+      });
+      setSearchHistory(prev => [searchingHistoryItem, ...prev.filter(h => h.traceId !== trace_id).slice(0, 49)]);
+
       // Wait for completion via WebSocket (just to know when it's done)
       await waitForResults(trace_id, apiUrl);
       const duration = Date.now() - startTime;
@@ -846,23 +858,26 @@ function SearchPageContent() {
           setResults(enrichResults(allResults));
           console.log('[Search] Parsed from tool output:', allResults.length, 'products');
 
-          // Track and save
+          // Track and update history status
           const totalResults = allResults.reduce((sum, p) => sum + p.results.length, 0);
           trackSearch(query, totalResults, duration);
 
-          const historyItem = addToSearchHistory({
-            query,
-            timestamp: Date.now(),
+          // Update history item to 'completed' status
+          updateSearchHistoryByTraceId(trace_id, {
+            status: 'completed',
             resultCount: totalResults,
             searchTimeMs: duration,
-            traceId: trace_id,
             topResults: allResults[0]?.results.slice(0, 3).map(r => ({
               seller: r.seller,
               price: r.price,
               currency: r.currency,
             })),
           });
-          setSearchHistory(prev => [historyItem, ...prev.slice(0, 49)]);
+          setSearchHistory(prev => prev.map(h =>
+            h.traceId === trace_id
+              ? { ...h, status: 'completed' as const, resultCount: totalResults, searchTimeMs: duration }
+              : h
+          ));
         } else if (trace.final_output) {
           // Fallback to final_output
           setRawResultText(trace.final_output);
@@ -872,19 +887,22 @@ function SearchPageContent() {
           const totalResults = parsed.reduce((sum, p) => sum + p.results.length, 0);
           trackSearch(query, totalResults, duration);
 
-          const historyItem = addToSearchHistory({
-            query,
-            timestamp: Date.now(),
+          // Update history item to 'completed' status
+          updateSearchHistoryByTraceId(trace_id, {
+            status: 'completed',
             resultCount: totalResults,
             searchTimeMs: duration,
-            traceId: trace_id,
             topResults: parsed[0]?.results.slice(0, 3).map(r => ({
               seller: r.seller,
               price: r.price,
               currency: r.currency,
             })),
           });
-          setSearchHistory(prev => [historyItem, ...prev.slice(0, 49)]);
+          setSearchHistory(prev => prev.map(h =>
+            h.traceId === trace_id
+              ? { ...h, status: 'completed' as const, resultCount: totalResults, searchTimeMs: duration }
+              : h
+          ));
         }
       }
     } catch (err) {
@@ -1257,43 +1275,78 @@ function SearchPageContent() {
                 <div className="space-y-1">
                   {discoveryHistory.slice(0, 10).map((item) => {
                     const isActive = item.traceId === discoveryCurrentTraceId;
+                    const isSearching = item.status === 'searching';
+                    const isError = item.status === 'error';
                     return (
                     <div
                       key={item.id}
                       className="relative group"
                     >
                       <button
-                        onClick={() => handleDiscoveryHistoryClick(item)}
+                        onClick={() => !isSearching && handleDiscoveryHistoryClick(item)}
+                        disabled={isSearching}
                         className={`w-full text-left p-2 rounded-lg transition-colors ${
                           isActive
                             ? 'bg-indigo-50 border border-indigo-200'
+                            : isSearching
+                            ? 'bg-amber-50 border border-amber-200'
+                            : isError
+                            ? 'bg-red-50 border border-red-200'
                             : 'hover:bg-white'
-                        }`}
+                        } ${isSearching ? 'cursor-wait' : ''}`}
                       >
-                        <p className={`text-sm truncate pr-6 ${isActive ? 'text-indigo-700 font-medium' : 'text-gray-800'}`}>{item.query}</p>
-                        <div className="flex items-center gap-2 text-xs text-gray-400">
+                        <div className="flex items-center gap-2">
+                          {/* Status indicator */}
+                          {isSearching && (
+                            <svg className="w-3 h-3 animate-spin text-amber-500 flex-shrink-0" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                            </svg>
+                          )}
+                          {item.status === 'completed' && (
+                            <svg className="w-3 h-3 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                          {isError && (
+                            <svg className="w-3 h-3 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          )}
+                          <p className={`text-sm truncate pr-6 ${
+                            isActive ? 'text-indigo-700 font-medium' :
+                            isSearching ? 'text-amber-700' :
+                            isError ? 'text-red-700' :
+                            'text-gray-800'
+                          }`}>{item.query}</p>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-gray-400 ml-5">
                           <span>{formatRelativeTime(item.timestamp)}</span>
-                          {item.productCount > 0 && (
+                          {isSearching && <span className="text-amber-500">Searching...</span>}
+                          {item.status === 'completed' && item.productCount > 0 && (
                             <>
                               <span>-</span>
                               <span>{item.productCount} products</span>
                             </>
                           )}
+                          {isError && <span className="text-red-500">Failed</span>}
                         </div>
                       </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteDiscoveryHistoryItem(item.id);
-                        }}
-                        className="absolute right-1 top-1/2 -translate-y-1/2 p-1 text-gray-300 hover:text-red-400
-                                   opacity-0 group-hover:opacity-100 transition-opacity"
-                        title="Delete"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
+                      {!isSearching && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteDiscoveryHistoryItem(item.id);
+                          }}
+                          className="absolute right-1 top-1/2 -translate-y-1/2 p-1 text-gray-300 hover:text-red-400
+                                     opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Delete"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      )}
                     </div>
                   );})}
                 </div>
@@ -1311,19 +1364,80 @@ function SearchPageContent() {
                 <div className="space-y-1">
                   {searchHistory.slice(0, 5).map((item) => {
                     const isActive = item.traceId === priceSearchTraceId;
+                    const isSearching = item.status === 'searching';
+                    const isError = item.status === 'error';
                     return (
-                    <button
+                    <div
                       key={item.id}
-                      onClick={() => handleLocalHistoryClick(item)}
-                      className={`w-full text-left p-2 rounded-lg transition-colors group ${
-                        isActive
-                          ? 'bg-indigo-50 border border-indigo-200'
-                          : 'hover:bg-white'
-                      }`}
+                      className="relative group"
                     >
-                      <p className={`text-sm truncate ${isActive ? 'text-indigo-700 font-medium' : 'text-gray-800'}`}>{item.query}</p>
-                      <p className="text-xs text-gray-400">{formatRelativeTime(item.timestamp)}</p>
-                    </button>
+                      <button
+                        onClick={() => !isSearching && handleLocalHistoryClick(item)}
+                        disabled={isSearching}
+                        className={`w-full text-left p-2 rounded-lg transition-colors ${
+                          isActive
+                            ? 'bg-indigo-50 border border-indigo-200'
+                            : isSearching
+                            ? 'bg-amber-50 border border-amber-200'
+                            : isError
+                            ? 'bg-red-50 border border-red-200'
+                            : 'hover:bg-white'
+                        } ${isSearching ? 'cursor-wait' : ''}`}
+                      >
+                        <div className="flex items-center gap-2">
+                          {/* Status indicator */}
+                          {isSearching && (
+                            <svg className="w-3 h-3 animate-spin text-amber-500 flex-shrink-0" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                            </svg>
+                          )}
+                          {item.status === 'completed' && (
+                            <svg className="w-3 h-3 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                          {isError && (
+                            <svg className="w-3 h-3 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          )}
+                          <p className={`text-sm truncate ${
+                            isActive ? 'text-indigo-700 font-medium' :
+                            isSearching ? 'text-amber-700' :
+                            isError ? 'text-red-700' :
+                            'text-gray-800'
+                          }`}>{item.query}</p>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-gray-400 ml-5">
+                          <span>{formatRelativeTime(item.timestamp)}</span>
+                          {isSearching && <span className="text-amber-500">Searching...</span>}
+                          {item.status === 'completed' && item.resultCount > 0 && (
+                            <>
+                              <span>-</span>
+                              <span>{item.resultCount} results</span>
+                            </>
+                          )}
+                          {isError && <span className="text-red-500">Failed</span>}
+                        </div>
+                      </button>
+                      {!isSearching && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteFromHistory(item.id);
+                            setSearchHistory(prev => prev.filter(h => h.id !== item.id));
+                          }}
+                          className="absolute right-1 top-1/2 -translate-y-1/2 p-1 text-gray-300 hover:text-red-400
+                                     opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Delete"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
                   );})}
                 </div>
               )

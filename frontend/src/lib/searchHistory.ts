@@ -3,6 +3,8 @@
  * Each user's browser stores their own search history.
  */
 
+export type SearchStatus = 'searching' | 'completed' | 'error';
+
 export interface SearchHistoryItem {
   id: string;
   query: string;
@@ -10,6 +12,8 @@ export interface SearchHistoryItem {
   resultCount: number;
   searchTimeMs: number;
   traceId?: string;  // Store trace ID for URL sharing
+  status: SearchStatus;
+  error?: string;
   // Store a summary of results for quick display
   topResults?: Array<{
     seller: string;
@@ -57,8 +61,13 @@ export function getSearchHistory(): SearchHistoryItem[] {
     if (!stored) return [];
 
     const items = JSON.parse(stored) as SearchHistoryItem[];
+    // Migrate old items without status field - default to 'completed'
+    const migratedItems = items.map(item => ({
+      ...item,
+      status: item.status || 'completed' as SearchStatus,
+    }));
     // Sort by timestamp descending (most recent first)
-    return items.sort((a, b) => b.timestamp - a.timestamp);
+    return migratedItems.sort((a, b) => b.timestamp - a.timestamp);
   } catch (error) {
     console.error('[SearchHistory] Failed to load:', error);
     return [];
@@ -89,6 +98,37 @@ export function addToSearchHistory(item: Omit<SearchHistoryItem, 'id'>): SearchH
   }
 
   return newItem;
+}
+
+/**
+ * Update an existing search history item by traceId.
+ */
+export function updateSearchHistoryByTraceId(
+  traceId: string,
+  updates: Partial<Pick<SearchHistoryItem, 'resultCount' | 'status' | 'error' | 'topResults' | 'searchTimeMs'>>
+): SearchHistoryItem | null {
+  const history = getSearchHistory();
+  const index = history.findIndex(h => h.traceId === traceId);
+
+  if (index === -1) {
+    console.warn('[SearchHistory] Item not found for traceId:', traceId);
+    return null;
+  }
+
+  const item = history[index];
+  if (updates.resultCount !== undefined) item.resultCount = updates.resultCount;
+  if (updates.status !== undefined) item.status = updates.status;
+  if (updates.error !== undefined) item.error = updates.error;
+  if (updates.topResults !== undefined) item.topResults = updates.topResults;
+  if (updates.searchTimeMs !== undefined) item.searchTimeMs = updates.searchTimeMs;
+
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+  } catch (error) {
+    console.error('[SearchHistory] Failed to update:', error);
+  }
+
+  return item;
 }
 
 /**

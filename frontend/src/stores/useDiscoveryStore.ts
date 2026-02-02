@@ -9,6 +9,7 @@ import {
   DiscoveryHistoryItem,
   getDiscoveryHistory,
   addToDiscoveryHistory,
+  updateDiscoveryHistoryByTraceId,
   deleteFromDiscoveryHistory,
 } from '@/lib/discoveryHistory';
 
@@ -135,11 +136,23 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
 
     try {
       const response = await api.runDiscovery(query, effectiveCountry);
-      set({
-        currentTraceId: response.trace_id,
-        originalTraceId: response.trace_id,  // Store as original trace for conversation
-        statusMessage: 'Researching products...',
+
+      // Add to history immediately with 'searching' status
+      const historyItem = addToDiscoveryHistory({
+        query,
+        timestamp: Date.now(),
+        productCount: 0,
+        traceId: response.trace_id,
+        status: 'searching',
       });
+
+      set((state) => ({
+        currentTraceId: response.trace_id,
+        originalTraceId: response.trace_id,
+        statusMessage: 'Researching products...',
+        history: [historyItem, ...state.history.filter(h => h.traceId !== response.trace_id).slice(0, 49)],
+      }));
+
       return response.trace_id;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Discovery failed';
@@ -231,20 +244,19 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
       role: 'assistant',
       content: assistantContent,
       timestamp: Date.now(),
-      traceId: currentTraceId || undefined,  // Associate trace ID with this message
+      traceId: currentTraceId || undefined,
       productsSnapshot: products,
     };
 
-    // Add to history only for original searches (not refinements)
-    if (query && !isRefinement) {
-      console.log('[Discovery] Adding to history:', query);
-      const historyItem = addToDiscoveryHistory({
-        query,
-        timestamp: Date.now(),
+    // Update history item status to completed (for original searches, not refinements)
+    if (currentTraceId && !isRefinement) {
+      console.log('[Discovery] Updating history status to completed:', currentTraceId);
+      updateDiscoveryHistoryByTraceId(currentTraceId, {
+        status: 'completed',
         productCount: products.length,
-        traceId: currentTraceId || undefined,
       });
 
+      // Update the history state to reflect the change
       set((state) => ({
         products,
         searchSummary: response.search_summary || null,
@@ -253,11 +265,14 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
         criteriaFeedback: response.criteria_feedback || [],
         isSearching: false,
         statusMessage: null,
-        history: [historyItem, ...state.history.slice(0, 49)],
+        history: state.history.map(h =>
+          h.traceId === currentTraceId
+            ? { ...h, status: 'completed' as const, productCount: products.length }
+            : h
+        ),
         messages: [...state.messages, assistantMessage],
       }));
     } else {
-      console.log('[Discovery] Not adding to history - isRefinement:', isRefinement, 'query:', !!query);
       set((state) => ({
         products,
         searchSummary: response.search_summary || null,
