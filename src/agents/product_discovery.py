@@ -748,16 +748,17 @@ async def _search_products_smart_impl(
 
     # Convert to simple format
     products = []
-    seen_names = set()
+    seen_urls = set()  # Deduplicate by URL, not name
 
     for result in all_results[:max_results]:
-        name = result.seller.name
-        name_key = name.lower()[:40]
-
-        if name_key in seen_names:
+        # Skip if we've already seen this exact URL
+        url_key = (result.url or "").lower()[:100]
+        if url_key and url_key in seen_urls:
             continue
-        seen_names.add(name_key)
+        if url_key:
+            seen_urls.add(url_key)
 
+        name = result.seller.name
         products.append({
             "name": name,
             "brand": extract_brand(name),
