@@ -1097,9 +1097,10 @@ def extract_brand(product_name: str) -> Optional[str]:
         "Panasonic", "Sharp", "Toshiba", "Hitachi", "Frigidaire",
         "Amcor", "Tadiran", "Tornado", "Crystal", "General Electric", "GE",
     ]
-    name_lower = product_name.lower()
     for brand in known_brands:
-        if brand.lower() in name_lower:
+        # Use word boundary matching to avoid partial matches (e.g., "GE" in "Generic")
+        pattern = r'\b' + re.escape(brand) + r'\b'
+        if re.search(pattern, product_name, re.IGNORECASE):
             return brand
     return None
 
