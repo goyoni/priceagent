@@ -26,6 +26,7 @@ import { ProductDiscoveryView } from '@/components/discovery/ProductDiscoveryVie
 import { ShoppingListView } from '@/components/shopping-list/ShoppingListView';
 import { PriceSearchNotification } from '@/components/shopping-list/PriceSearchNotification';
 import { useCountry } from '@/hooks/useCountry';
+import { useDashboardAccess } from '@/hooks/useDashboardAccess';
 import { useShoppingListStore } from '@/stores/useShoppingListStore';
 import { useDiscoveryStore } from '@/stores/useDiscoveryStore';
 import type { ShoppingListItem } from '@/lib/types';
@@ -191,6 +192,9 @@ function SearchPageContent() {
 
   // Country detection
   const { country, setCountry } = useCountry('IL');
+
+  // Dashboard access (hidden in production)
+  const { showDashboardLink } = useDashboardAccess();
 
   // Shopping list from store
   const {
@@ -1327,18 +1331,20 @@ function SearchPageContent() {
           </div>
         </div>
 
-        {/* Sidebar Footer */}
-        <div className="p-3 border-t border-gray-200">
-          <a
-            href="/dashboard"
-            className="flex items-center gap-2 px-3 py-2 text-sm text-gray-500 hover:text-gray-800 hover:bg-white rounded-lg transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-            Dashboard
-          </a>
-        </div>
+        {/* Sidebar Footer - Dashboard link (development only) */}
+        {showDashboardLink && (
+          <div className="p-3 border-t border-gray-200">
+            <a
+              href="/dashboard"
+              className="flex items-center gap-2 px-3 py-2 text-sm text-gray-500 hover:text-gray-800 hover:bg-white rounded-lg transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              Dashboard
+            </a>
+          </div>
+        )}
       </aside>
 
       {/* Main Content Area */}
@@ -1468,12 +1474,14 @@ function SearchPageContent() {
                   {bundles.length > 0 && ` from ${bundles.length} bundle stores`}
                   {searchTime && <span className="text-gray-300"> in {(searchTime / 1000).toFixed(1)}s</span>}
                 </div>
-                <a
-                  href="/dashboard"
-                  className="text-sm text-indigo-600 hover:underline"
-                >
-                  Advanced view →
-                </a>
+                {showDashboardLink && (
+                  <a
+                    href="/dashboard"
+                    className="text-sm text-indigo-600 hover:underline"
+                  >
+                    Advanced view →
+                  </a>
+                )}
               </div>
 
               {/* Bundle opportunities table */}
@@ -1630,12 +1638,14 @@ function SearchPageContent() {
                   Search completed
                   {searchTime && <span className="text-gray-300"> in {(searchTime / 1000).toFixed(1)}s</span>}
                 </div>
-                <a
-                  href="/dashboard"
-                  className="text-sm text-indigo-600 hover:underline"
-                >
-                  View in dashboard →
-                </a>
+                {showDashboardLink && (
+                  <a
+                    href="/dashboard"
+                    className="text-sm text-indigo-600 hover:underline"
+                  >
+                    View in dashboard →
+                  </a>
+                )}
               </div>
 
               <div className="bg-white shadow-soft border border-gray-200 rounded-xl p-4">

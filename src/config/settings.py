@@ -56,6 +56,16 @@ class Settings(BaseSettings):
     api_host: str = Field(default="0.0.0.0", description="API host")
     api_port: int = Field(default=8000, description="API port")
 
+    # Dashboard authentication
+    dashboard_password: Optional[str] = Field(
+        default=None,
+        description="Password to access dashboard (None = no auth in dev)",
+    )
+    environment: str = Field(
+        default="development",
+        description="Environment: 'development' or 'production'",
+    )
+
     # Cache settings
     cache_enabled: bool = Field(default=True, description="Enable caching")
     cache_path: Path = Field(

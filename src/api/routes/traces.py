@@ -1,12 +1,39 @@
 """FastAPI routes for trace data."""
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+import secrets
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException, Query, Header
 from fastapi.responses import JSONResponse
 from typing import List, Optional
 
 from src.observability import get_trace_store
+from src.config.settings import settings
 
 router = APIRouter(prefix="/traces", tags=["traces"])
+
+
+def verify_dashboard_auth(
+    auth_token: Optional[str] = Query(None, alias="auth"),
+    x_dashboard_auth: Optional[str] = Header(None),
+) -> bool:
+    """Verify dashboard authentication.
+
+    In development (no password set), always allows access.
+    In production (password set), requires valid auth token.
+    """
+    # No password configured = development mode, allow all
+    if not settings.dashboard_password:
+        return True
+
+    # Check query param or header
+    token = auth_token or x_dashboard_auth
+    if not token:
+        raise HTTPException(status_code=401, detail="Dashboard authentication required")
+
+    # Constant-time comparison to prevent timing attacks
+    if not secrets.compare_digest(token, settings.dashboard_password):
+        raise HTTPException(status_code=401, detail="Invalid dashboard credentials")
+
+    return True
 
 
 def _trace_to_dict(t, truncate_prompt: bool = True) -> dict:
@@ -32,7 +59,11 @@ def _trace_to_dict(t, truncate_prompt: bool = True) -> dict:
 
 
 @router.get("/")
-async def list_traces(limit: int = 50, include_children: bool = True):
+async def list_traces(
+    limit: int = 50,
+    include_children: bool = True,
+    _auth: bool = Depends(verify_dashboard_auth),
+):
     """List recent traces with summary stats.
 
     By default, child traces are nested under their parent traces.
@@ -71,7 +102,7 @@ async def list_traces(limit: int = 50, include_children: bool = True):
 
 
 @router.get("/running")
-async def list_running_traces():
+async def list_running_traces(_auth: bool = Depends(verify_dashboard_auth)):
     """Get currently running traces."""
     store = get_trace_store()
     traces = store.get_running_traces()
@@ -89,7 +120,7 @@ async def list_running_traces():
 
 
 @router.get("/{trace_id}")
-async def get_trace(trace_id: str):
+async def get_trace(trace_id: str, _auth: bool = Depends(verify_dashboard_auth)):
     """Get a trace with all its spans."""
     store = get_trace_store()
     trace = store.get_trace(trace_id, include_spans=True)
@@ -159,7 +190,7 @@ async def get_trace(trace_id: str):
 
 
 @router.delete("/{trace_id}")
-async def delete_trace(trace_id: str):
+async def delete_trace(trace_id: str, _auth: bool = Depends(verify_dashboard_auth)):
     """Delete a trace by ID."""
     store = get_trace_store()
     success = store.delete_trace(trace_id)
@@ -168,6 +199,27 @@ async def delete_trace(trace_id: str):
         return JSONResponse(status_code=404, content={"error": "Trace not found"})
 
     return {"status": "deleted", "trace_id": trace_id}
+
+
+@router.get("/auth/check")
+async def check_dashboard_auth(_auth: bool = Depends(verify_dashboard_auth)):
+    """Check if dashboard authentication is valid.
+
+    Returns 200 if authenticated, 401 if not.
+    """
+    return {"authenticated": True}
+
+
+@router.get("/auth/info")
+async def get_auth_info():
+    """Get authentication requirements.
+
+    Returns whether auth is required (production) or not (development).
+    """
+    return {
+        "auth_required": bool(settings.dashboard_password),
+        "environment": settings.environment,
+    }
 
 
 @router.websocket("/ws")
