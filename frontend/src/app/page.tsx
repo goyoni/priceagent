@@ -288,6 +288,7 @@ function SearchPageContent() {
                   resultCount: shoppingList.length,
                   searchTimeMs: 0,  // Not available from WebSocket
                   traceId: traceId,
+                  status: 'completed',
                 });
                 setSearchHistory((prev) => [historyItem, ...prev.slice(0, 49)]);
                 console.log('[PriceSearch] Added to history:', historyItem.id);
