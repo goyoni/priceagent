@@ -100,6 +100,10 @@ fi
 echo ""
 echo -e "${YELLOW}Building frontend...${NC}"
 cd "$FRONTEND_DIR"
+
+# Clear .next cache to prevent corruption issues
+rm -rf .next
+
 if npm run build; then
     echo -e "${GREEN}✓${NC} Frontend built (static files in frontend/out/)"
 else
