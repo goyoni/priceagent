@@ -15,7 +15,12 @@ const nextConfig = {
   webpack: (config) => {
     config.watchOptions = {
       ...config.watchOptions,
-      ignored: ['**/node_modules/**', '/Users/yonigo/fbsource/**'],
+      ignored: [
+        '**/node_modules/**',
+        '**/fbsource/**',
+        '/Users/yonigo/fbsource/**',
+        '**/.git/**',
+      ],
     };
     return config;
   },

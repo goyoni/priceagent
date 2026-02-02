@@ -112,15 +112,15 @@ function ProgressEvent({ span, depth = 0 }: { span: Span; depth?: number }) {
         ? 'text-error'
         : name.startsWith('⚠️')
           ? 'text-warning'
-          : 'text-secondary';
+          : 'text-slate-400';
 
   return (
     <div
-      className="border-l-2 border-surface-hover pl-3 py-1"
+      className="border-l-2 border-slate-600 pl-3 py-1"
       style={{ marginLeft: depth * 16 }}
     >
       <div
-        className="flex items-start gap-2 cursor-pointer hover:bg-surface-hover rounded px-1 -ml-1"
+        className="flex items-start gap-2 cursor-pointer hover:bg-slate-700-hover rounded px-1 -ml-1"
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <span className="text-base">{emoji}</span>
@@ -130,13 +130,13 @@ function ProgressEvent({ span, depth = 0 }: { span: Span; depth?: number }) {
             <span className="ml-2 text-xs text-warning animate-pulse">running...</span>
           )}
         </div>
-        <span className="text-xs text-secondary shrink-0">
+        <span className="text-xs text-slate-400 shrink-0">
           {formatDuration(span.duration_ms || 0)}
         </span>
       </div>
 
       {isExpanded && span.tool_output && (
-        <div className="mt-1 ml-6 text-xs bg-surface rounded p-2 whitespace-pre-wrap font-mono max-h-32 overflow-y-auto">
+        <div className="mt-1 ml-6 text-xs bg-slate-700 rounded p-2 whitespace-pre-wrap font-mono max-h-32 overflow-y-auto">
           {typeof span.tool_output === 'string'
             ? span.tool_output
             : JSON.stringify(span.tool_output, null, 2)}
@@ -212,23 +212,23 @@ function NestedSpanItem({ node, isParallel = false }: NestedSpanItemProps) {
         <div className="absolute -left-1 top-4 w-2 h-2 rounded-full bg-cyan-400" title="Running in parallel" />
       )}
 
-      <div className="bg-surface rounded-lg overflow-hidden mb-2">
+      <div className="bg-slate-700 rounded-lg overflow-hidden mb-2">
         {/* Span Header */}
         <div
-          className="px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-surface-hover"
+          className="px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-slate-700-hover"
           onClick={() => setIsExpanded(!isExpanded)}
         >
           <div className="flex items-center gap-2">
             {/* Nesting depth indicator */}
             {depth > 0 && (
-              <span className="text-xs text-secondary opacity-50">L{depth}</span>
+              <span className="text-xs text-slate-400 opacity-50">L{depth}</span>
             )}
             <Badge variant={typeVariant as 'primary' | 'success' | 'info' | 'warning' | 'error' | 'secondary'} className="text-xs uppercase">
               {spanType.replace('_', ' ')}
             </Badge>
             <span className="font-medium">{span.name || 'Unknown'}</span>
             {span.cached === true && (
-              <span className="text-xs text-secondary">(Cached)</span>
+              <span className="text-xs text-slate-400">(Cached)</span>
             )}
             {children.length > 0 && (
               <span className="text-xs text-cyan-400">
@@ -239,40 +239,40 @@ function NestedSpanItem({ node, isParallel = false }: NestedSpanItemProps) {
 
           <div className="flex items-center gap-3 text-sm">
             {span.input_tokens !== undefined && (
-              <span className="text-secondary">{span.input_tokens} in</span>
+              <span className="text-slate-400">{span.input_tokens} in</span>
             )}
             {span.output_tokens !== undefined && (
-              <span className="text-secondary">{span.output_tokens} out</span>
+              <span className="text-slate-400">{span.output_tokens} out</span>
             )}
             {span.cached !== null && span.cached !== undefined && (
               <Badge variant={span.cached ? 'secondary' : 'info'}>
                 {span.cached ? 'CACHED' : 'FRESH'}
               </Badge>
             )}
-            <span className="text-secondary">
+            <span className="text-slate-400">
               {formatDuration(span.duration_ms || 0)}
             </span>
             <Badge variant={statusVariant as 'warning' | 'success' | 'error'}>{spanStatus}</Badge>
-            <span className="text-secondary">{isExpanded ? '▼' : '▶'}</span>
+            <span className="text-slate-400">{isExpanded ? '▼' : '▶'}</span>
           </div>
         </div>
 
         {/* Span Content (expanded) */}
         {isExpanded && (
-          <div className="px-4 py-3 bg-background border-t border-surface-hover space-y-3">
+          <div className="px-4 py-3 bg-slate-800 border-t border-slate-600 space-y-3">
             {/* Parent span info */}
             {span.parent_span_id && (
-              <div className="text-xs text-secondary">
+              <div className="text-xs text-slate-400">
                 Parent: <span className="font-mono">{span.parent_span_id.slice(0, 8)}...</span>
               </div>
             )}
 
             {span.system_prompt && (
               <div>
-                <div className="text-xs text-secondary uppercase mb-1">
+                <div className="text-xs text-slate-400 uppercase mb-1">
                   System Prompt
                 </div>
-                <pre className="text-sm bg-surface p-3 rounded overflow-x-auto max-h-48 whitespace-pre-wrap">
+                <pre className="text-sm bg-slate-700 p-3 rounded overflow-x-auto max-h-48 whitespace-pre-wrap">
                   {span.system_prompt}
                 </pre>
               </div>
@@ -280,10 +280,10 @@ function NestedSpanItem({ node, isParallel = false }: NestedSpanItemProps) {
 
             {span.input_messages != null && (
               <div>
-                <div className="text-xs text-secondary uppercase mb-1">
+                <div className="text-xs text-slate-400 uppercase mb-1">
                   Input Messages
                 </div>
-                <pre className="text-sm bg-surface p-3 rounded overflow-x-auto max-h-48 whitespace-pre-wrap">
+                <pre className="text-sm bg-slate-700 p-3 rounded overflow-x-auto max-h-48 whitespace-pre-wrap">
                   {formatInput(span.input_messages)}
                 </pre>
               </div>
@@ -291,8 +291,8 @@ function NestedSpanItem({ node, isParallel = false }: NestedSpanItemProps) {
 
             {span.output_content && (
               <div>
-                <div className="text-xs text-secondary uppercase mb-1">Output</div>
-                <pre className="text-sm bg-surface p-3 rounded overflow-x-auto max-h-48 whitespace-pre-wrap">
+                <div className="text-xs text-slate-400 uppercase mb-1">Output</div>
+                <pre className="text-sm bg-slate-700 p-3 rounded overflow-x-auto max-h-48 whitespace-pre-wrap">
                   {typeof span.output_content === 'string'
                     ? span.output_content
                     : JSON.stringify(span.output_content, null, 2)}
@@ -302,10 +302,10 @@ function NestedSpanItem({ node, isParallel = false }: NestedSpanItemProps) {
 
             {span.tool_input != null && (
               <div>
-                <div className="text-xs text-secondary uppercase mb-1">
+                <div className="text-xs text-slate-400 uppercase mb-1">
                   Tool Input
                 </div>
-                <pre className="text-sm bg-surface p-3 rounded overflow-x-auto max-h-48 whitespace-pre-wrap">
+                <pre className="text-sm bg-slate-700 p-3 rounded overflow-x-auto max-h-48 whitespace-pre-wrap">
                   {formatInput(span.tool_input)}
                 </pre>
               </div>
@@ -313,10 +313,10 @@ function NestedSpanItem({ node, isParallel = false }: NestedSpanItemProps) {
 
             {span.tool_output && (
               <div>
-                <div className="text-xs text-secondary uppercase mb-1">
+                <div className="text-xs text-slate-400 uppercase mb-1">
                   Tool Output
                 </div>
-                <pre className="text-sm bg-surface p-3 rounded overflow-x-auto max-h-48 whitespace-pre-wrap">
+                <pre className="text-sm bg-slate-700 p-3 rounded overflow-x-auto max-h-48 whitespace-pre-wrap">
                   {typeof span.tool_output === 'string'
                     ? span.tool_output.slice(0, 2000)
                     : JSON.stringify(span.tool_output, null, 2).slice(0, 2000)}
@@ -387,9 +387,9 @@ function SpanItem({ span, index }: { span: Span; index: number }) {
   };
 
   return (
-    <div className="bg-surface rounded-lg overflow-hidden">
+    <div className="bg-slate-700 rounded-lg overflow-hidden">
       <div
-        className="px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-surface-hover"
+        className="px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-slate-700-hover"
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <div className="flex items-center gap-2">
@@ -398,47 +398,47 @@ function SpanItem({ span, index }: { span: Span; index: number }) {
           </Badge>
           <span className="font-medium">{span.name || 'Unknown'}</span>
           {span.cached === true && (
-            <span className="text-xs text-secondary">(Cached)</span>
+            <span className="text-xs text-slate-400">(Cached)</span>
           )}
         </div>
 
         <div className="flex items-center gap-3 text-sm">
           {span.input_tokens !== undefined && (
-            <span className="text-secondary">{span.input_tokens} in</span>
+            <span className="text-slate-400">{span.input_tokens} in</span>
           )}
           {span.output_tokens !== undefined && (
-            <span className="text-secondary">{span.output_tokens} out</span>
+            <span className="text-slate-400">{span.output_tokens} out</span>
           )}
-          <span className="text-secondary">
+          <span className="text-slate-400">
             {formatDuration(span.duration_ms || 0)}
           </span>
           <Badge variant={statusVariant as 'warning' | 'success' | 'error'}>{spanStatus}</Badge>
-          <span className="text-secondary">{isExpanded ? '▼' : '▶'}</span>
+          <span className="text-slate-400">{isExpanded ? '▼' : '▶'}</span>
         </div>
       </div>
 
       {isExpanded && (
-        <div className="px-4 py-3 bg-background border-t border-surface-hover space-y-3">
+        <div className="px-4 py-3 bg-slate-800 border-t border-slate-600 space-y-3">
           {span.system_prompt && (
             <div>
-              <div className="text-xs text-secondary uppercase mb-1">System Prompt</div>
-              <pre className="text-sm bg-surface p-3 rounded overflow-x-auto max-h-48 whitespace-pre-wrap">
+              <div className="text-xs text-slate-400 uppercase mb-1">System Prompt</div>
+              <pre className="text-sm bg-slate-700 p-3 rounded overflow-x-auto max-h-48 whitespace-pre-wrap">
                 {span.system_prompt}
               </pre>
             </div>
           )}
           {span.tool_input != null && (
             <div>
-              <div className="text-xs text-secondary uppercase mb-1">Tool Input</div>
-              <pre className="text-sm bg-surface p-3 rounded overflow-x-auto max-h-48 whitespace-pre-wrap">
+              <div className="text-xs text-slate-400 uppercase mb-1">Tool Input</div>
+              <pre className="text-sm bg-slate-700 p-3 rounded overflow-x-auto max-h-48 whitespace-pre-wrap">
                 {formatInput(span.tool_input)}
               </pre>
             </div>
           )}
           {span.tool_output && (
             <div>
-              <div className="text-xs text-secondary uppercase mb-1">Tool Output</div>
-              <pre className="text-sm bg-surface p-3 rounded overflow-x-auto max-h-48 whitespace-pre-wrap">
+              <div className="text-xs text-slate-400 uppercase mb-1">Tool Output</div>
+              <pre className="text-sm bg-slate-700 p-3 rounded overflow-x-auto max-h-48 whitespace-pre-wrap">
                 {typeof span.tool_output === 'string'
                   ? span.tool_output.slice(0, 2000)
                   : JSON.stringify(span.tool_output, null, 2).slice(0, 2000)}
@@ -471,7 +471,7 @@ export function SpanList({ spans }: SpanListProps) {
 
   if (!spans || spans.length === 0) {
     return (
-      <div className="text-secondary text-sm py-4">No spans recorded</div>
+      <div className="text-slate-400 text-sm py-4">No spans recorded</div>
     );
   }
 
@@ -483,13 +483,13 @@ export function SpanList({ spans }: SpanListProps) {
       {/* View Mode Toggle */}
       {hasNesting && regularSpans.length > 0 && (
         <div className="flex items-center justify-end gap-2">
-          <span className="text-xs text-secondary">View:</span>
+          <span className="text-xs text-slate-400">View:</span>
           <button
             onClick={() => setViewMode('nested')}
             className={`px-2 py-1 text-xs rounded ${
               viewMode === 'nested'
                 ? 'bg-cyan-500/20 text-cyan-400'
-                : 'bg-surface text-secondary hover:text-white'
+                : 'bg-slate-700 text-slate-400 hover:text-white'
             }`}
           >
             Nested
@@ -499,7 +499,7 @@ export function SpanList({ spans }: SpanListProps) {
             className={`px-2 py-1 text-xs rounded ${
               viewMode === 'flat'
                 ? 'bg-cyan-500/20 text-cyan-400'
-                : 'bg-surface text-secondary hover:text-white'
+                : 'bg-slate-700 text-slate-400 hover:text-white'
             }`}
           >
             Flat
@@ -510,10 +510,10 @@ export function SpanList({ spans }: SpanListProps) {
       {/* Progress Timeline (if any) */}
       {progressEvents.length > 0 && (
         <div>
-          <h3 className="text-sm font-medium text-secondary mb-2">
+          <h3 className="text-sm font-medium text-slate-400 mb-2">
             Activity Timeline ({progressEvents.length} events)
           </h3>
-          <div className="bg-surface rounded-lg p-3 space-y-0">
+          <div className="bg-slate-700 rounded-lg p-3 space-y-0">
             {progressEvents.map((span, idx) => (
               <ProgressEvent key={span.id || span.span_id || idx} span={span} />
             ))}
@@ -524,7 +524,7 @@ export function SpanList({ spans }: SpanListProps) {
       {/* Regular Spans */}
       {regularSpans.length > 0 && (
         <div>
-          <h3 className="text-sm font-medium text-secondary mb-2">
+          <h3 className="text-sm font-medium text-slate-400 mb-2">
             Trace Details ({regularSpans.length} spans)
             {hasNesting && viewMode === 'nested' && (
               <span className="ml-2 text-xs text-cyan-400">
@@ -554,7 +554,7 @@ export function SpanList({ spans }: SpanListProps) {
 
       {/* Legend */}
       {hasNesting && viewMode === 'nested' && (
-        <div className="text-xs text-secondary flex items-center gap-4 pt-2 border-t border-surface">
+        <div className="text-xs text-slate-400 flex items-center gap-4 pt-2 border-t border-slate-600">
           <span className="flex items-center gap-1">
             <span className="w-2 h-2 rounded-full bg-cyan-400"></span>
             Parallel execution

@@ -11,11 +11,11 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variantStyles = {
-  primary: 'bg-primary text-white hover:bg-primary/80',
-  secondary: 'bg-surface text-secondary hover:bg-surface-hover',
-  success: 'bg-success text-white hover:bg-success/80',
-  danger: 'bg-error text-white hover:bg-error/80',
-  ghost: 'bg-transparent text-secondary hover:bg-surface',
+  primary: 'bg-cyan-600 text-white hover:bg-cyan-500',
+  secondary: 'bg-slate-700 text-slate-300 hover:bg-slate-600',
+  success: 'bg-emerald-600 text-white hover:bg-emerald-500',
+  danger: 'bg-red-600 text-white hover:bg-red-500',
+  ghost: 'bg-transparent text-slate-300 hover:bg-slate-700',
 };
 
 const sizeStyles = {
@@ -34,7 +34,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         className={cn(
           'inline-flex items-center justify-center rounded font-medium transition-colors',
-          'focus:outline-none focus:ring-2 focus:ring-primary/50',
+          'focus:outline-none focus:ring-2 focus:ring-cyan-500/50',
           'disabled:opacity-50 disabled:cursor-not-allowed',
           variantStyles[variant],
           sizeStyles[size],

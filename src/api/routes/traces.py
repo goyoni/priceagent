@@ -119,6 +119,27 @@ async def list_running_traces(_auth: bool = Depends(verify_dashboard_auth)):
     }
 
 
+@router.get("/auth/check")
+async def check_dashboard_auth_endpoint(_auth: bool = Depends(verify_dashboard_auth)):
+    """Check if dashboard authentication is valid.
+
+    Returns 200 if authenticated, 401 if not.
+    """
+    return {"authenticated": True}
+
+
+@router.get("/auth/info")
+async def get_auth_info():
+    """Get authentication requirements.
+
+    Returns whether auth is required (production) or not (development).
+    """
+    return {
+        "auth_required": bool(settings.dashboard_password),
+        "environment": settings.environment,
+    }
+
+
 @router.get("/{trace_id}")
 async def get_trace(trace_id: str, _auth: bool = Depends(verify_dashboard_auth)):
     """Get a trace with all its spans."""
@@ -199,27 +220,6 @@ async def delete_trace(trace_id: str, _auth: bool = Depends(verify_dashboard_aut
         return JSONResponse(status_code=404, content={"error": "Trace not found"})
 
     return {"status": "deleted", "trace_id": trace_id}
-
-
-@router.get("/auth/check")
-async def check_dashboard_auth(_auth: bool = Depends(verify_dashboard_auth)):
-    """Check if dashboard authentication is valid.
-
-    Returns 200 if authenticated, 401 if not.
-    """
-    return {"authenticated": True}
-
-
-@router.get("/auth/info")
-async def get_auth_info():
-    """Get authentication requirements.
-
-    Returns whether auth is required (production) or not (development).
-    """
-    return {
-        "auth_required": bool(settings.dashboard_password),
-        "environment": settings.environment,
-    }
 
 
 @router.websocket("/ws")
