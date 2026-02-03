@@ -75,6 +75,143 @@ COUNTRY_LANGUAGES = {
     },
 }
 
+# Category-specific criteria templates - domain knowledge for each product type
+# These ensure the agent considers all important attributes, not just user-specified ones
+CATEGORY_CRITERIA_TEMPLATES = {
+    "oven": {
+        "hebrew": "תנור",
+        "criteria": [
+            {"name": "volume", "hebrew": "נפח", "unit": "liters", "description": "Internal oven capacity"},
+            {"name": "programs", "hebrew": "תכניות", "unit": "count", "description": "Number of cooking programs/modes"},
+            {"name": "cleaning_method", "hebrew": "שיטת ניקוי", "options": ["pyrolytic", "catalytic", "steam", "manual"], "description": "Self-cleaning method"},
+            {"name": "max_temperature", "hebrew": "טמפרטורה מקסימלית", "unit": "°C", "description": "Maximum temperature"},
+            {"name": "energy_rating", "hebrew": "דירוג אנרגיה", "options": ["A+++", "A++", "A+", "A", "B"], "description": "Energy efficiency class"},
+            {"name": "type", "hebrew": "סוג", "options": ["built-in", "freestanding", "range"], "description": "Installation type"},
+            {"name": "width", "hebrew": "רוחב", "unit": "cm", "description": "Standard widths: 60cm, 90cm"},
+            {"name": "convection", "hebrew": "קונבקציה", "options": ["yes", "no"], "description": "Hot air circulation"},
+            {"name": "grill", "hebrew": "גריל", "options": ["yes", "no"], "description": "Built-in grill function"},
+        ],
+    },
+    "stove": {
+        "hebrew": "תנור",
+        "criteria": [
+            {"name": "volume", "hebrew": "נפח", "unit": "liters", "description": "Internal oven capacity"},
+            {"name": "programs", "hebrew": "תכניות", "unit": "count", "description": "Number of cooking programs/modes"},
+            {"name": "cleaning_method", "hebrew": "שיטת ניקוי", "options": ["pyrolytic", "catalytic", "steam", "manual"], "description": "Self-cleaning method"},
+            {"name": "max_temperature", "hebrew": "טמפרטורה מקסימלית", "unit": "°C", "description": "Maximum temperature"},
+            {"name": "energy_rating", "hebrew": "דירוג אנרגיה", "options": ["A+++", "A++", "A+", "A", "B"], "description": "Energy efficiency class"},
+            {"name": "type", "hebrew": "סוג", "options": ["built-in", "freestanding", "range"], "description": "Installation type"},
+            {"name": "width", "hebrew": "רוחב", "unit": "cm", "description": "Standard widths: 60cm, 90cm"},
+            {"name": "convection", "hebrew": "קונבקציה", "options": ["yes", "no"], "description": "Hot air circulation"},
+            {"name": "grill", "hebrew": "גריל", "options": ["yes", "no"], "description": "Built-in grill function"},
+        ],
+    },
+    "refrigerator": {
+        "hebrew": "מקרר",
+        "criteria": [
+            {"name": "total_volume", "hebrew": "נפח כולל", "unit": "liters", "description": "Total storage capacity"},
+            {"name": "freezer_volume", "hebrew": "נפח מקפיא", "unit": "liters", "description": "Freezer capacity"},
+            {"name": "noise_level", "hebrew": "רמת רעש", "unit": "dB", "description": "Operating noise in decibels"},
+            {"name": "energy_rating", "hebrew": "דירוג אנרגיה", "options": ["A+++", "A++", "A+", "A", "B"], "description": "Energy efficiency class"},
+            {"name": "type", "hebrew": "סוג", "options": ["top-freezer", "bottom-freezer", "side-by-side", "french-door"], "description": "Configuration type"},
+            {"name": "no_frost", "hebrew": "נו פרוסט", "options": ["yes", "no"], "description": "No-frost technology"},
+            {"name": "water_dispenser", "hebrew": "מתקן מים", "options": ["yes", "no"], "description": "Built-in water dispenser"},
+            {"name": "ice_maker", "hebrew": "מכונת קרח", "options": ["yes", "no"], "description": "Built-in ice maker"},
+            {"name": "width", "hebrew": "רוחב", "unit": "cm", "description": "Standard widths: 60cm, 70cm, 90cm"},
+        ],
+    },
+    "fridge": {
+        "hebrew": "מקרר",
+        "criteria": [
+            {"name": "total_volume", "hebrew": "נפח כולל", "unit": "liters", "description": "Total storage capacity"},
+            {"name": "freezer_volume", "hebrew": "נפח מקפיא", "unit": "liters", "description": "Freezer capacity"},
+            {"name": "noise_level", "hebrew": "רמת רעש", "unit": "dB", "description": "Operating noise in decibels"},
+            {"name": "energy_rating", "hebrew": "דירוג אנרגיה", "options": ["A+++", "A++", "A+", "A", "B"], "description": "Energy efficiency class"},
+            {"name": "type", "hebrew": "סוג", "options": ["top-freezer", "bottom-freezer", "side-by-side", "french-door"], "description": "Configuration type"},
+            {"name": "no_frost", "hebrew": "נו פרוסט", "options": ["yes", "no"], "description": "No-frost technology"},
+            {"name": "water_dispenser", "hebrew": "מתקן מים", "options": ["yes", "no"], "description": "Built-in water dispenser"},
+            {"name": "ice_maker", "hebrew": "מכונת קרח", "options": ["yes", "no"], "description": "Built-in ice maker"},
+            {"name": "width", "hebrew": "רוחב", "unit": "cm", "description": "Standard widths: 60cm, 70cm, 90cm"},
+        ],
+    },
+    "washing_machine": {
+        "hebrew": "מכונת כביסה",
+        "criteria": [
+            {"name": "capacity", "hebrew": "קיבולת", "unit": "kg", "description": "Load capacity in kg"},
+            {"name": "spin_speed", "hebrew": "מהירות סחיטה", "unit": "rpm", "description": "Maximum spin speed"},
+            {"name": "noise_level", "hebrew": "רמת רעש", "unit": "dB", "description": "Operating noise"},
+            {"name": "energy_rating", "hebrew": "דירוג אנרגיה", "options": ["A+++", "A++", "A+", "A", "B"], "description": "Energy efficiency class"},
+            {"name": "programs", "hebrew": "תכניות", "unit": "count", "description": "Number of wash programs"},
+            {"name": "steam", "hebrew": "קיטור", "options": ["yes", "no"], "description": "Steam washing function"},
+            {"name": "inverter", "hebrew": "אינוורטר", "options": ["yes", "no"], "description": "Inverter motor technology"},
+            {"name": "quick_wash", "hebrew": "כביסה מהירה", "options": ["yes", "no"], "description": "Quick wash cycle"},
+        ],
+    },
+    "dishwasher": {
+        "hebrew": "מדיח כלים",
+        "criteria": [
+            {"name": "place_settings", "hebrew": "מערכות כלים", "unit": "sets", "description": "Number of place settings"},
+            {"name": "noise_level", "hebrew": "רמת רעש", "unit": "dB", "description": "Operating noise in decibels"},
+            {"name": "energy_rating", "hebrew": "דירוג אנרגיה", "options": ["A+++", "A++", "A+", "A", "B"], "description": "Energy efficiency class"},
+            {"name": "programs", "hebrew": "תכניות", "unit": "count", "description": "Number of wash programs"},
+            {"name": "width", "hebrew": "רוחב", "unit": "cm", "description": "Standard widths: 45cm, 60cm"},
+            {"name": "half_load", "hebrew": "חצי מילוי", "options": ["yes", "no"], "description": "Half load option"},
+            {"name": "quick_wash", "hebrew": "שטיפה מהירה", "options": ["yes", "no"], "description": "Quick wash cycle"},
+            {"name": "third_rack", "hebrew": "סל שלישי", "options": ["yes", "no"], "description": "Third rack for cutlery"},
+        ],
+    },
+    "air_conditioner": {
+        "hebrew": "מזגן",
+        "criteria": [
+            {"name": "cooling_capacity", "hebrew": "הספק קירור", "unit": "BTU", "description": "Cooling capacity in BTU"},
+            {"name": "noise_level", "hebrew": "רמת רעש", "unit": "dB", "description": "Indoor unit noise level"},
+            {"name": "energy_rating", "hebrew": "דירוג אנרגיה", "options": ["A+++", "A++", "A+", "A", "B"], "description": "Energy efficiency class"},
+            {"name": "inverter", "hebrew": "אינוורטר", "options": ["yes", "no"], "description": "Inverter technology"},
+            {"name": "wifi", "hebrew": "וייפי", "options": ["yes", "no"], "description": "WiFi connectivity"},
+            {"name": "heating", "hebrew": "חימום", "options": ["yes", "no"], "description": "Heating function"},
+            {"name": "room_size", "hebrew": "גודל חדר", "unit": "sqm", "description": "Recommended room size"},
+        ],
+    },
+    "tv": {
+        "hebrew": "טלוויזיה",
+        "criteria": [
+            {"name": "screen_size", "hebrew": "גודל מסך", "unit": "inches", "description": "Screen diagonal"},
+            {"name": "resolution", "hebrew": "רזולוציה", "options": ["4K", "8K", "Full HD", "HD"], "description": "Display resolution"},
+            {"name": "panel_type", "hebrew": "סוג פאנל", "options": ["OLED", "QLED", "LED", "Mini-LED"], "description": "Display technology"},
+            {"name": "refresh_rate", "hebrew": "קצב רענון", "unit": "Hz", "description": "Refresh rate"},
+            {"name": "smart_tv", "hebrew": "סמארט", "options": ["yes", "no"], "description": "Smart TV features"},
+            {"name": "hdmi_ports", "hebrew": "יציאות HDMI", "unit": "count", "description": "Number of HDMI ports"},
+            {"name": "hdr", "hebrew": "HDR", "options": ["HDR10", "Dolby Vision", "HDR10+", "none"], "description": "HDR support"},
+        ],
+    },
+}
+
+
+def detect_product_category(requirement: str) -> tuple[str, dict]:
+    """Detect the product category from user requirement and return criteria template.
+
+    Returns:
+        Tuple of (category_key, criteria_template) or (None, {}) if not detected
+    """
+    requirement_lower = requirement.lower()
+
+    category_keywords = {
+        "oven": ["oven", "תנור אפייה", "תנור בילט אין"],
+        "stove": ["stove", "תנור", "כיריים", "range"],
+        "refrigerator": ["refrigerator", "fridge", "מקרר"],
+        "washing_machine": ["washing machine", "מכונת כביסה", "washer"],
+        "dishwasher": ["dishwasher", "מדיח כלים", "מדיח"],
+        "air_conditioner": ["air conditioner", "מזגן", "ac", "a/c"],
+        "tv": ["tv", "television", "טלוויזיה"],
+    }
+
+    for category, keywords in category_keywords.items():
+        for keyword in keywords:
+            if keyword in requirement_lower:
+                return category, CATEGORY_CRITERIA_TEMPLATES.get(category, {})
+
+    return None, {}
+
 # Product type translations for common appliances
 PRODUCT_TRANSLATIONS = {
     "he": {
@@ -172,10 +309,11 @@ async def _research_and_discover_impl(
     """Perform deep research to understand product criteria and find recommendations.
 
     This tool:
-    1. Searches in the user's language for buying guides and expert recommendations
-    2. Looks for specific product recommendations from reviews, social media, news
-    3. Extracts realistic, research-backed criteria
-    4. Returns both criteria AND specific product recommendations
+    1. Detects the product category and loads domain-specific criteria
+    2. Searches in the user's language for buying guides and expert recommendations
+    3. Looks for specific product recommendations from reviews, social media, news
+    4. Extracts realistic, research-backed criteria + category-specific attributes
+    5. Returns both criteria AND specific product model recommendations (5+ different models)
 
     Args:
         requirement: User's natural language requirement
@@ -193,10 +331,20 @@ async def _research_and_discover_impl(
     lang_code = country_info["code"]
     currency = country_info["currency"]
 
+    # Detect product category and get criteria template
+    category_key, category_template = detect_product_category(requirement)
+    category_criteria = category_template.get("criteria", []) if category_template else []
+
     await report_progress(
         "🔍 Researching",
         f"Searching for expert recommendations in {language}..."
     )
+
+    if category_key:
+        await report_progress(
+            "📋 Category detected",
+            f"{category_key} - Loading {len(category_criteria)} domain criteria (volume, programs, cleaning, etc.)"
+        )
 
     # Collect research from web searches
     research_data = {
@@ -270,26 +418,58 @@ async def _research_and_discover_impl(
 
         research_summary = json.dumps(research_data, indent=2, ensure_ascii=False)
 
+        # Build category criteria section for prompt
+        category_criteria_text = ""
+        if category_criteria:
+            criteria_list = []
+            for c in category_criteria:
+                if c.get("options"):
+                    criteria_list.append(f"- {c['name']} ({c['hebrew']}): {c['description']}. Options: {', '.join(c['options'])}")
+                else:
+                    criteria_list.append(f"- {c['name']} ({c['hebrew']}): {c['description']}. Unit: {c.get('unit', 'N/A')}")
+            category_criteria_text = f"""
+IMPORTANT - CATEGORY-SPECIFIC CRITERIA FOR {category_key.upper()}:
+You MUST evaluate and report on ALL of these criteria, not just user-specified ones:
+{chr(10).join(criteria_list)}
+
+For each criterion:
+1. Determine if the user specified a preference
+2. If not specified, research what values are recommended for the user's use case
+3. Be explicit about which criteria come from user vs. domain knowledge
+"""
+
         system_prompt = f"""You are a product research expert helping users in {country} find the right products.
 Your task is to analyze research data and extract:
 1. MARKET-REALISTIC criteria based on what's actually available in {country}
-2. Specific product models that experts recommend
+2. At least 5 DIFFERENT product models that experts recommend (NOT the same model)
 3. Price expectations in local currency ({currency})
+
+{category_criteria_text}
+
+CRITICAL - FINDING DIFFERENT MODELS:
+- Find AT LEAST 5 DIFFERENT product models (different brands or model numbers)
+- Do NOT return the same model from different sources
+- Each recommended model should be UNIQUE
+- If you find "Samsung Model X" mentioned 3 times, list it ONCE and find 4 other models
+- Prioritize finding variety: different brands, different price points, different feature sets
+
+CRITICAL - TRANSPARENT CRITERIA GATHERING:
+- EXPLICITLY list which criteria came from the user's request
+- EXPLICITLY list which criteria you added from domain knowledge
+- For each criterion, explain WHY it matters for this product category
+- If a criterion is important but the user didn't mention it, ADD it and explain why
 
 CRITICAL - MARKET REALITY:
 - Research what products are ACTUALLY AVAILABLE in {country}, not ideal specs
-- For noise levels: Find the TYPICAL range in the local market. If most fridges in {country} are 42-46dB, then 42dB IS "quiet" for that market
+- For noise levels: Find the TYPICAL range in the local market
 - Set "ideal_value" as the user's wish and "market_value" as what's realistically available
-- Include "market_context" explaining the local reality (e.g., "In Israel, refrigerators typically range 42-46dB, with 42dB being the quietest available")
-- For capacity: Research actual recommendations for the use case (e.g., family size)
+- Include "market_context" explaining the local reality
 - Include specific model numbers when mentioned in research
 - Prices must be in {currency} ({country_info['currency_name']})
-- If research is insufficient, acknowledge uncertainty
 
 UNITS - Use {country}'s measurement system:
 - Volume: {country_info['volume_unit']} (NOT {('cubic feet' if country_info['volume_unit'] == 'liters' else 'liters')})
 - Dimensions: {country_info['dimension_unit']} (NOT {('inches' if country_info['dimension_unit'] == 'cm' else 'cm')})
-- Always convert to local units if source uses different system
 
 Respond with valid JSON only."""
 
@@ -302,14 +482,20 @@ RESEARCH DATA:
 Based on this research, provide:
 {{
   "category": "product category",
+  "criteria_transparency": {{
+    "user_specified": ["list of criteria the user explicitly asked for"],
+    "domain_added": ["list of criteria you added from domain knowledge - explain why each matters"],
+    "total_criteria_count": number
+  }},
   "criteria": [
     {{
       "attribute": "attribute name",
+      "source": "user" or "domain_knowledge",
+      "why_important": "explanation of why this criterion matters for this product",
       "ideal_value": "what user ideally wants",
       "market_value": "what's realistically available in {country}",
       "market_context": "explanation of local market reality",
       "is_flexible": true/false,
-      "source": "where this came from",
       "confidence": "high/medium/low"
     }}
   ],
@@ -318,12 +504,13 @@ Based on this research, provide:
       "model": "specific model name/number",
       "brand": "brand name",
       "source": "where recommended (article title, expert, etc.)",
-      "why_recommended": "why this model fits the requirement"
+      "why_recommended": "why this model fits the requirement",
+      "key_differentiator": "what makes this model unique compared to others"
     }}
   ],
   "search_terms": {{
     "native_language": ["search terms in {language} - ALWAYS include native language terms"],
-    "model_searches": ["specific model searches"],
+    "model_searches": ["specific model searches - should have 5+ different models"],
     "category_searches": ["category + feature searches in {language}"]
   }},
   "price_range": {{
@@ -333,8 +520,14 @@ Based on this research, provide:
     "source": "where this estimate comes from"
   }},
   "research_quality": "good/moderate/limited",
-  "market_notes": "important notes about the {country} market for this product category"
-}}"""
+  "market_notes": "important notes about the {country} market for this product category",
+  "model_diversity_check": "confirmation that you found 5+ DIFFERENT models, not duplicates"
+}}
+
+REMEMBER:
+- Find AT LEAST 5 different product models
+- Include ALL domain-specific criteria even if user didn't ask
+- Be transparent about which criteria came from user vs. domain knowledge"""
 
         response = await client.chat.completions.create(
             model="gpt-4o",  # Using GPT-4o for better research analysis
@@ -343,7 +536,7 @@ Based on this research, provide:
                 {"role": "user", "content": user_prompt}
             ],
             temperature=0.3,
-            max_tokens=2000,
+            max_tokens=3000,
         )
 
         result_text = response.choices[0].message.content.strip()
@@ -359,19 +552,27 @@ Based on this research, provide:
         result["country"] = country
         result["language"] = language
         result["original_requirement"] = requirement
+        result["category_template_used"] = category_key
 
         criteria_count = len(result.get("criteria", []))
         models_count = len(result.get("recommended_models", []))
 
+        # Report on criteria transparency
+        transparency = result.get("criteria_transparency", {})
+        user_criteria = len(transparency.get("user_specified", []))
+        domain_criteria = len(transparency.get("domain_added", []))
+
         await report_progress(
             "✅ Research complete",
-            f"Found {criteria_count} criteria, {models_count} recommended models"
+            f"Found {models_count} different models, {criteria_count} criteria ({user_criteria} from user, {domain_criteria} from domain knowledge)"
         )
 
         logger.info("Research complete",
                    requirement=requirement,
                    criteria_count=criteria_count,
                    models_count=models_count,
+                   user_criteria=user_criteria,
+                   domain_criteria=domain_criteria,
                    research_quality=result.get("research_quality"))
 
         return json.dumps(result, indent=2, ensure_ascii=False)
@@ -899,10 +1100,12 @@ async def _analyze_and_format_results_impl(
         "original_requirement": original_requirement,
         "category": category,
         "country": country,
+        "criteria_transparency": research.get("criteria_transparency", {}),
         "criteria_used": criteria,
         "recommended_models_searched": [m.get("model") for m in recommended_models],
         "search_attempts": search_results.get("search_attempts", []),
         "total_products_found": len(products),
+        "unique_models_found": len(seen_models),
         "research_quality": research.get("research_quality", "unknown"),
         "market_notes": market_notes,
     }
@@ -934,6 +1137,9 @@ async def _analyze_and_format_results_impl(
     try:
         client = get_openai_client()
 
+        # Get criteria transparency info
+        criteria_transparency = research.get("criteria_transparency", {})
+
         system_prompt = f"""You are a product analyst using ADAPTIVE FILTERING.
 
 Your job is to:
@@ -941,6 +1147,13 @@ Your job is to:
 2. Score ALL products against VALID criteria
 3. If strict criteria eliminate all products, RELAX criteria based on market reality
 4. Always return the BEST AVAILABLE products, even if they don't perfectly match
+
+CRITICAL - RETURN DIFFERENT MODELS:
+- You MUST return 5 DIFFERENT product models (different brands or model numbers)
+- Do NOT return the same model multiple times even if it's available at different stores
+- Each product in your output must be a UNIQUE model
+- Prioritize variety: different brands, different price points, different feature sets
+- If products list has duplicates, SKIP the duplicates and find unique models
 
 CRITERIA VALIDATION:
 - If a criterion is physically/logically impossible, IGNORE IT and note why in filtering_notes
@@ -962,7 +1175,11 @@ Respond with valid JSON only."""
 
         user_prompt = f"""Analyze these products for: "{original_requirement}"
 
-CRITERIA (may include market context):
+CRITERIA TRANSPARENCY:
+- User specified: {json.dumps(criteria_transparency.get('user_specified', []), ensure_ascii=False)}
+- Domain knowledge added: {json.dumps(criteria_transparency.get('domain_added', []), ensure_ascii=False)}
+
+FULL CRITERIA (may include market context):
 {json.dumps(criteria, indent=2, ensure_ascii=False)}
 
 MARKET NOTES:
@@ -972,9 +1189,12 @@ RECOMMENDED MODELS FROM RESEARCH:
 {json.dumps(recommended_models, indent=2, ensure_ascii=False)}
 
 PRODUCTS FOUND ({len(products)} total):
-{json.dumps(products[:20], indent=2, ensure_ascii=False)}
+{json.dumps(products[:30], indent=2, ensure_ascii=False)}
 
 Use ADAPTIVE FILTERING - return best available products even if they don't perfectly match criteria.
+
+IMPORTANT: Return exactly 5 DIFFERENT models (unique brand+model combinations).
+Do NOT return the same model from different stores.
 
 Output:
 {{
@@ -983,7 +1203,7 @@ Output:
       "id": "prod_<timestamp>_<index>",
       "name": "full product name",
       "brand": "brand",
-      "model_number": "model if found",
+      "model_number": "model if found - MUST BE UNIQUE",
       "category": "{category}",
       "key_specs": ["inferred specs based on model/brand knowledge"],
       "price_range": "{country_info['currency']}X,XXX",
@@ -1002,12 +1222,14 @@ Output:
 }}
 
 IMPORTANT:
-- Include 10 best matching products (or all available if fewer than 10)
+- Return EXACTLY 5 DIFFERENT models (or all available if fewer than 5 unique models exist)
+- Each model MUST have a unique model_number - no duplicates
 - NEVER return empty products if there are products available - adapt criteria instead
 - If a product matches a recommended model, prioritize it
 - Be honest about what can't be verified from the product name
 - Price should use {country_info['currency']} symbol
-- Add market_reality_note when criteria were adapted"""
+- Add market_reality_note when criteria were adapted
+- Include model_diversity_note confirming the 5 models are unique"""
 
         response = await client.chat.completions.create(
             model="gpt-4o",

@@ -11,7 +11,7 @@ from src.state.models import (
     PriceSearchSession,
     PriceSearchStatus,
 )
-from src.agents.product_discovery import extract_brand, extract_model_number
+from src.agents.product_discovery import extract_brand, extract_model_number, detect_product_category
 
 
 def create_test_app() -> FastAPI:
@@ -194,3 +194,77 @@ class TestDiscoveryAgentRoute:
         assert response.status_code == 200
         data = response.json()
         assert "trace_id" in data
+
+
+class TestDetectProductCategory:
+    """Tests for detect_product_category function."""
+
+    def test_detect_oven(self):
+        """Should detect oven category."""
+        category, template = detect_product_category("looking for a good oven for baking")
+        assert category == "oven"
+        assert "criteria" in template
+        assert len(template["criteria"]) > 0
+
+    def test_detect_stove(self):
+        """Should detect stove category."""
+        category, template = detect_product_category("I need a new stove")
+        assert category == "stove"
+
+    def test_detect_stove_hebrew(self):
+        """Should detect stove category in Hebrew."""
+        category, template = detect_product_category("אני מחפש תנור חדש")
+        assert category == "stove"
+
+    def test_detect_refrigerator(self):
+        """Should detect refrigerator category."""
+        category, template = detect_product_category("quiet fridge for family")
+        assert category == "refrigerator"
+
+    def test_detect_refrigerator_hebrew(self):
+        """Should detect refrigerator in Hebrew."""
+        category, template = detect_product_category("מקרר שקט למשפחה")
+        assert category == "refrigerator"
+
+    def test_detect_washing_machine(self):
+        """Should detect washing machine category."""
+        category, template = detect_product_category("washing machine with steam function")
+        assert category == "washing_machine"
+        # Check criteria includes steam
+        criteria_names = [c["name"] for c in template["criteria"]]
+        assert "steam" in criteria_names
+
+    def test_detect_dishwasher(self):
+        """Should detect dishwasher category."""
+        category, template = detect_product_category("מדיח כלים שקט")
+        assert category == "dishwasher"
+
+    def test_detect_air_conditioner(self):
+        """Should detect air conditioner category."""
+        category, template = detect_product_category("I need an AC for my bedroom")
+        assert category == "air_conditioner"
+
+    def test_detect_tv(self):
+        """Should detect TV category."""
+        category, template = detect_product_category("looking for a 55 inch TV")
+        assert category == "tv"
+
+    def test_unknown_category(self):
+        """Should return None for unknown category."""
+        category, template = detect_product_category("I need a new chair")
+        assert category is None
+        assert template == {}
+
+    def test_stove_criteria_includes_domain_knowledge(self):
+        """Should include domain-specific criteria for stove."""
+        category, template = detect_product_category("I need a stove")
+        assert category == "stove"
+
+        criteria_names = [c["name"] for c in template["criteria"]]
+        # Verify domain knowledge criteria are included
+        assert "volume" in criteria_names
+        assert "programs" in criteria_names
+        assert "cleaning_method" in criteria_names
+        assert "max_temperature" in criteria_names
+        assert "convection" in criteria_names
+
