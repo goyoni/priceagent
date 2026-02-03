@@ -63,6 +63,13 @@ app.include_router(geo_router)
 app.include_router(shopping_list_router)
 app.include_router(logs_router)
 
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for Railway/container orchestration."""
+    return {"status": "healthy"}
+
+
 # Initialize global trace store
 trace_store = TraceStore()
 set_trace_store(trace_store)
