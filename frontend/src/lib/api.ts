@@ -10,6 +10,7 @@ import type {
 } from './types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
+const AUTH_STORAGE_KEY = 'dashboard_auth_token';
 
 class ApiClient {
   private baseUrl: string;
@@ -18,16 +19,32 @@ class ApiClient {
     this.baseUrl = baseUrl;
   }
 
+  /**
+   * Get the stored auth token from localStorage.
+   */
+  private getAuthToken(): string | null {
+    if (typeof window === 'undefined') return null;
+    return localStorage.getItem(AUTH_STORAGE_KEY);
+  }
+
   private async fetch<T>(
     endpoint: string,
-    options?: RequestInit
+    options?: RequestInit & { requiresAuth?: boolean }
   ): Promise<T> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...options?.headers as Record<string, string>,
+    };
+
+    // Add auth header if token exists and endpoint might need it
+    const authToken = this.getAuthToken();
+    if (authToken) {
+      headers['X-Dashboard-Auth'] = authToken;
+    }
+
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
       ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options?.headers,
-      },
+      headers,
     });
 
     if (!response.ok) {
