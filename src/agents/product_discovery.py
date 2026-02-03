@@ -377,9 +377,9 @@ async def _research_and_discover_impl(
             criteria_list = []
             for c in category_criteria:
                 if c.get("options"):
-                    criteria_list.append(f"- {c['name']} ({c['hebrew']}): {c['description']}. Options: {', '.join(c['options'])}")
+                    criteria_list.append(f"- {c['name']}: {c['description']}. Options: {', '.join(c['options'])}")
                 else:
-                    criteria_list.append(f"- {c['name']} ({c['hebrew']}): {c['description']}. Unit: {c.get('unit', 'N/A')}")
+                    criteria_list.append(f"- {c['name']}: {c['description']}. Unit: {c.get('unit', 'N/A')}")
             category_criteria_text = f"""
 IMPORTANT - CATEGORY-SPECIFIC CRITERIA FOR {category_key.upper()}:
 You MUST evaluate and report on ALL of these criteria, not just user-specified ones:

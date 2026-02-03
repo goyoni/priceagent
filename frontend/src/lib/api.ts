@@ -196,6 +196,118 @@ class ApiClient {
   }> {
     return this.fetch(`/api/shopping-list/search-status/${sessionId}`);
   }
+
+  // ============================================================================
+  // Criteria Management (password protected)
+  // ============================================================================
+
+  /**
+   * Get all product categories.
+   */
+  async getCategories(authToken?: string): Promise<Array<{
+    category: string;
+    source: string;
+    criteria_count: number;
+    created_at: string;
+    updated_at: string;
+  }>> {
+    const headers: Record<string, string> = {};
+    if (authToken) {
+      headers['X-Dashboard-Auth'] = authToken;
+    }
+    const data = await this.fetch<{ categories: Array<{
+      category: string;
+      source: string;
+      criteria_count: number;
+      created_at: string;
+      updated_at: string;
+    }> }>('/api/criteria/', { headers });
+    return data.categories;
+  }
+
+  /**
+   * Get criteria for a specific category.
+   */
+  async getCategoryCriteria(category: string, authToken?: string): Promise<{
+    category: string;
+    criteria: Array<{
+      name: string;
+      description: string;
+      unit?: string;
+      options?: string[];
+    }>;
+    source: string;
+    created_at?: string;
+    updated_at?: string;
+  }> {
+    const headers: Record<string, string> = {};
+    if (authToken) {
+      headers['X-Dashboard-Auth'] = authToken;
+    }
+    return this.fetch(`/api/criteria/${category}`, { headers });
+  }
+
+  /**
+   * Update criteria for a category.
+   */
+  async updateCategoryCriteria(
+    category: string,
+    criteria: Array<{
+      name: string;
+      description: string;
+      unit?: string;
+      options?: string[];
+    }>,
+    authToken?: string
+  ): Promise<{ status: string; category: string; criteria_count: number }> {
+    const headers: Record<string, string> = {};
+    if (authToken) {
+      headers['X-Dashboard-Auth'] = authToken;
+    }
+    return this.fetch(`/api/criteria/${category}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ criteria }),
+    });
+  }
+
+  /**
+   * Create a new category with criteria.
+   */
+  async createCategory(
+    category: string,
+    criteria: Array<{
+      name: string;
+      description: string;
+      unit?: string;
+      options?: string[];
+    }>,
+    authToken?: string
+  ): Promise<{ status: string; category: string; criteria_count: number }> {
+    const headers: Record<string, string> = {};
+    if (authToken) {
+      headers['X-Dashboard-Auth'] = authToken;
+    }
+    return this.fetch(`/api/criteria/${category}`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ criteria }),
+    });
+  }
+
+  /**
+   * Delete a category.
+   */
+  async deleteCategory(category: string, authToken?: string): Promise<{ status: string; category: string }> {
+    const headers: Record<string, string> = {};
+    if (authToken) {
+      headers['X-Dashboard-Auth'] = authToken;
+    }
+    return this.fetch(`/api/criteria/${category}`, {
+      method: 'DELETE',
+      headers,
+    });
+  }
 }
 
 // Export singleton instance

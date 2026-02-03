@@ -31,6 +31,7 @@ from src.api.routes.analytics import router as analytics_router
 from src.api.routes.geo import router as geo_router
 from src.api.routes.shopping_list import router as shopping_list_router
 from src.api.routes.logs import router as logs_router
+from src.api.routes.criteria import router as criteria_router
 from src.api.middleware import RequestLoggingMiddleware
 from src.db.base import init_db
 from src.logging import configure_production_logging
@@ -62,6 +63,7 @@ app.include_router(analytics_router)
 app.include_router(geo_router)
 app.include_router(shopping_list_router)
 app.include_router(logs_router)
+app.include_router(criteria_router)
 
 
 @app.get("/health")
@@ -96,6 +98,12 @@ if frontend_path.exists():
     async def serve_sellers_page():
         """Serve the sellers page."""
         return FileResponse(frontend_path / "sellers" / "index.html")
+
+    @app.get("/criteria")
+    @app.get("/criteria/")
+    async def serve_criteria_page():
+        """Serve the criteria management page."""
+        return FileResponse(frontend_path / "criteria" / "index.html")
 
     # Serve static assets (JS, CSS, images)
     app.mount("/_next", StaticFiles(directory=frontend_path / "_next"), name="next_assets")
