@@ -15,14 +15,41 @@ CASSETTES_DIR = Path(__file__).parent / "fixtures" / "cassettes"
 @pytest.fixture(autouse=True)
 def disable_trace_logging():
     """Disable trace logging for all tests to prevent test traces from polluting storage."""
-    original = os.environ.get("TRACE_ENABLED")
-    os.environ["TRACE_ENABLED"] = "false"
+    # Patch settings directly since the module is already imported
+    from src.config import settings as settings_module
+
+    original_value = settings_module.settings.trace_enabled
+    settings_module.settings.trace_enabled = False
     yield
-    # Restore original value
-    if original is not None:
-        os.environ["TRACE_ENABLED"] = original
-    else:
-        os.environ.pop("TRACE_ENABLED", None)
+    settings_module.settings.trace_enabled = original_value
+
+
+@pytest.fixture(autouse=True)
+def init_test_database(tmp_path: Path):
+    """Initialize test database with all tables for tests that need it."""
+    import asyncio
+    from src.db.base import Base, get_engine, _engine, _async_session_factory
+    from src.db import models  # noqa: F401 - Import to register models
+
+    # Reset global engine to use test database
+    import src.db.base as base_module
+    base_module._engine = None
+    base_module._async_session_factory = None
+
+    # Create test database
+    test_db_path = tmp_path / "test.db"
+
+    async def init():
+        engine = get_engine(test_db_path)
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+
+    asyncio.get_event_loop().run_until_complete(init())
+    yield
+
+    # Reset after test
+    base_module._engine = None
+    base_module._async_session_factory = None
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:

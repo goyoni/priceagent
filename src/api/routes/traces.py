@@ -72,7 +72,7 @@ async def list_traces(
     Requires dashboard authentication.
     """
     store = get_trace_store()
-    traces = store.get_traces(limit=limit * 2)  # Get more to account for children
+    traces = await store.get_traces_async(limit=limit * 2)  # Get more to account for children
 
     # Separate parent and child traces
     parent_traces = []
@@ -152,7 +152,7 @@ async def get_trace(trace_id: str):
     Note: This endpoint is public to support the discovery feature.
     """
     store = get_trace_store()
-    trace = store.get_trace(trace_id, include_spans=True)
+    trace = await store.get_trace_async(trace_id, include_spans=True)
 
     if not trace:
         return JSONResponse(status_code=404, content={"error": "Trace not found"})
@@ -222,7 +222,7 @@ async def get_trace(trace_id: str):
 async def delete_trace(trace_id: str, _auth: bool = Depends(verify_dashboard_auth)):
     """Delete a trace by ID."""
     store = get_trace_store()
-    success = store.delete_trace(trace_id)
+    success = await store.delete_trace(trace_id)
 
     if not success:
         return JSONResponse(status_code=404, content={"error": "Trace not found"})
@@ -234,7 +234,7 @@ async def delete_trace(trace_id: str, _auth: bool = Depends(verify_dashboard_aut
 async def clear_all_traces(_auth: bool = Depends(verify_dashboard_auth)):
     """Clear all traces from storage."""
     store = get_trace_store()
-    count = store.clear_all_traces()
+    count = await store.clear_all_traces()
     return {"status": "cleared", "deleted_count": count}
 
 
@@ -249,7 +249,7 @@ async def cleanup_stale_traces(
         stuck_timeout_minutes: Delete traces running longer than this (default: 60)
     """
     store = get_trace_store()
-    result = store.clear_stale_traces(stuck_timeout_minutes=stuck_timeout_minutes)
+    result = await store.clear_stale_traces(stuck_timeout_minutes=stuck_timeout_minutes)
     return {"status": "cleaned", **result}
 
 

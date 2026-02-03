@@ -1,12 +1,95 @@
 """SQLAlchemy ORM models."""
 
+import json
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
-from sqlalchemy import DateTime, Float, String, Text, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
+
+
+class TraceModel(Base):
+    """SQLAlchemy model for traces."""
+
+    __tablename__ = "traces"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    session_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True, index=True)
+    parent_trace_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True, index=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    ended_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="running")
+
+    # Input/output
+    input_prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    final_output: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Aggregated stats
+    total_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    total_input_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    total_output_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    total_duration_ms: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
+    # Operational summary (stored as JSON)
+    operational_summary_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Error info
+    error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Relationship to spans
+    spans: Mapped[list["SpanModel"]] = relationship(
+        "SpanModel", back_populates="trace", cascade="all, delete-orphan"
+    )
+
+    def __repr__(self) -> str:
+        return f"<TraceModel(id={self.id}, status={self.status})>"
+
+
+class SpanModel(Base):
+    """SQLAlchemy model for spans."""
+
+    __tablename__ = "spans"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    trace_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("traces.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    parent_span_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+    span_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    started_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    ended_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    duration_ms: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="running")
+
+    # LLM-specific fields (stored as JSON where complex)
+    system_prompt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    input_messages_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    output_content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    input_tokens: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    output_tokens: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+
+    # Tool-specific fields (stored as JSON where complex)
+    tool_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    tool_input_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    tool_output_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    cached: Mapped[Optional[bool]] = mapped_column(nullable=True)
+
+    # Handoff-specific fields
+    from_agent: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    to_agent: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+
+    # Error info
+    error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Relationship to trace
+    trace: Mapped["TraceModel"] = relationship("TraceModel", back_populates="spans")
+
+    def __repr__(self) -> str:
+        return f"<SpanModel(id={self.id}, name={self.name}, status={self.status})>"
 
 
 class Seller(Base):

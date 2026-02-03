@@ -81,6 +81,7 @@ Based on the conversation history, refine the product recommendations accordingl
         session_id=request.session_id,
         parent_trace_id=request.parent_trace_id
     )
+    trace_id = trace.id if trace else ""
 
     # Run agent in background using asyncio.create_task
     # This schedules the coroutine on the current event loop
@@ -94,7 +95,7 @@ Based on the conversation history, refine the product recommendations accordingl
     # Create task directly on the running event loop
     asyncio.create_task(run_agent())
 
-    return QueryResponse(trace_id=trace.id, status="started")
+    return QueryResponse(trace_id=trace_id, status="started")
 
 
 class SellerDraftRequest(BaseModel):

@@ -87,7 +87,8 @@ async def start_price_search(request: StartSearchRequest) -> StartSearchResponse
 
     # Start trace
     trace = await hooks.start_trace(input_prompt=prompt)
-    session.trace_id = trace.id
+    trace_id = trace.id if trace else None
+    session.trace_id = trace_id
 
     # Store session
     _search_sessions[session.id] = session
@@ -108,7 +109,7 @@ async def start_price_search(request: StartSearchRequest) -> StartSearchResponse
             logger.info(
                 "price_search_completed",
                 session_id=session.id,
-                trace_id=trace.id,
+                trace_id=trace_id,
             )
 
         except Exception as e:
@@ -119,7 +120,7 @@ async def start_price_search(request: StartSearchRequest) -> StartSearchResponse
             logger.error(
                 "price_search_failed",
                 session_id=session.id,
-                trace_id=trace.id,
+                trace_id=trace_id,
                 error=str(e),
             )
 
@@ -128,14 +129,14 @@ async def start_price_search(request: StartSearchRequest) -> StartSearchResponse
     logger.info(
         "price_search_started",
         session_id=session.id,
-        trace_id=trace.id,
+        trace_id=trace_id,
         item_count=len(request.items),
         country=request.country,
     )
 
     return StartSearchResponse(
         session_id=session.id,
-        trace_id=trace.id,
+        trace_id=trace_id or "",
         status="started",
     )
 
