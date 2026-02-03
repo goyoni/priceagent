@@ -133,3 +133,71 @@ class Seller(Base):
     def contact(self) -> Optional[str]:
         """Get preferred contact (WhatsApp or phone)."""
         return self.whatsapp_number or self.phone_number
+
+
+class CategoryCriteria(Base):
+    """Product category criteria for discovery."""
+
+    __tablename__ = "category_criteria"
+
+    category: Mapped[str] = mapped_column(String(100), primary_key=True)
+    criteria_json: Mapped[str] = mapped_column(Text, nullable=False)
+    source: Mapped[str] = mapped_column(String(20), default="discovered")
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+
+    def __repr__(self) -> str:
+        return f"<CategoryCriteria(category={self.category}, source={self.source})>"
+
+
+class NegotiationModel(Base):
+    """SQLAlchemy model for negotiations."""
+
+    __tablename__ = "negotiations"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    product_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True, index=True)
+    seller_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True, index=True)
+    status: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    data_json: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+
+    def __repr__(self) -> str:
+        return f"<NegotiationModel(id={self.id}, status={self.status})>"
+
+
+class ApprovalModel(Base):
+    """SQLAlchemy model for approval requests."""
+
+    __tablename__ = "approvals"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    negotiation_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True, index=True)
+    status: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    data_json: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    def __repr__(self) -> str:
+        return f"<ApprovalModel(id={self.id}, status={self.status})>"
+
+
+class SessionModel(Base):
+    """SQLAlchemy model for purchase sessions."""
+
+    __tablename__ = "sessions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    status: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    data_json: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    def __repr__(self) -> str:
+        return f"<SessionModel(id={self.id}, status={self.status})>"
+

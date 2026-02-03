@@ -1,11 +1,12 @@
-"""State storage using SQLite."""
+"""State storage using SQLAlchemy for PostgreSQL/SQLite support."""
 
-import json
 from datetime import datetime
-from pathlib import Path
 from typing import Optional
 
-import aiosqlite
+from sqlalchemy import select
+
+from src.db.base import get_async_session_factory
+from src.db.models import ApprovalModel, NegotiationModel, SessionModel
 
 from .models import (
     ApprovalRequest,
@@ -17,161 +18,163 @@ from .models import (
 
 
 class StateStore:
-    """Async SQLite-based state storage."""
+    """Async SQLAlchemy-based state storage with PostgreSQL/SQLite support."""
 
-    def __init__(self, db_path: str | Path = "data/negotiations.db"):
-        self.db_path = Path(db_path)
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-
-    async def initialize(self) -> None:
-        """Create database tables if they don't exist."""
-        async with aiosqlite.connect(self.db_path) as db:
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS negotiations (
-                    id TEXT PRIMARY KEY,
-                    product_id TEXT,
-                    seller_id TEXT,
-                    status TEXT,
-                    data TEXT,
-                    created_at TEXT,
-                    updated_at TEXT
-                )
-            """)
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS approvals (
-                    id TEXT PRIMARY KEY,
-                    negotiation_id TEXT,
-                    status TEXT,
-                    data TEXT,
-                    created_at TEXT,
-                    resolved_at TEXT
-                )
-            """)
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS sessions (
-                    id TEXT PRIMARY KEY,
-                    status TEXT,
-                    data TEXT,
-                    created_at TEXT,
-                    completed_at TEXT
-                )
-            """)
-            await db.commit()
+    def __init__(self):
+        pass
 
     async def save_negotiation(self, state: NegotiationState) -> None:
         """Save or update a negotiation state."""
         state.updated_at = datetime.now()
-        async with aiosqlite.connect(self.db_path) as db:
-            await db.execute(
-                """INSERT OR REPLACE INTO negotiations
-                   (id, product_id, seller_id, status, data, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    state.id,
-                    state.product.id,
-                    state.seller.id,
-                    state.status.value,
-                    state.model_dump_json(),
-                    state.started_at.isoformat(),
-                    state.updated_at.isoformat(),
-                ),
+
+        session_factory = get_async_session_factory()
+        async with session_factory() as session:
+            # Check if exists
+            result = await session.execute(
+                select(NegotiationModel).where(NegotiationModel.id == state.id)
             )
-            await db.commit()
+            model = result.scalar_one_or_none()
+
+            if model:
+                model.product_id = state.product.id
+                model.seller_id = state.seller.id
+                model.status = state.status.value
+                model.data_json = state.model_dump_json()
+            else:
+                model = NegotiationModel(
+                    id=state.id,
+                    product_id=state.product.id,
+                    seller_id=state.seller.id,
+                    status=state.status.value,
+                    data_json=state.model_dump_json(),
+                )
+                session.add(model)
+
+            await session.commit()
 
     async def get_negotiation(self, negotiation_id: str) -> Optional[NegotiationState]:
         """Retrieve a negotiation by ID."""
-        async with aiosqlite.connect(self.db_path) as db:
-            async with db.execute(
-                "SELECT data FROM negotiations WHERE id = ?", (negotiation_id,)
-            ) as cursor:
-                row = await cursor.fetchone()
-                if row:
-                    return NegotiationState.model_validate_json(row[0])
+        session_factory = get_async_session_factory()
+        async with session_factory() as session:
+            result = await session.execute(
+                select(NegotiationModel).where(NegotiationModel.id == negotiation_id)
+            )
+            model = result.scalar_one_or_none()
+
+            if model:
+                return NegotiationState.model_validate_json(model.data_json)
         return None
 
     async def get_negotiations_by_status(
         self, status: NegotiationStatus
     ) -> list[NegotiationState]:
         """Get all negotiations with a specific status."""
-        async with aiosqlite.connect(self.db_path) as db:
-            async with db.execute(
-                "SELECT data FROM negotiations WHERE status = ?", (status.value,)
-            ) as cursor:
-                rows = await cursor.fetchall()
-                return [NegotiationState.model_validate_json(row[0]) for row in rows]
+        session_factory = get_async_session_factory()
+        async with session_factory() as session:
+            result = await session.execute(
+                select(NegotiationModel).where(NegotiationModel.status == status.value)
+            )
+            models = result.scalars().all()
+            return [NegotiationState.model_validate_json(m.data_json) for m in models]
 
     async def get_active_negotiations(self) -> list[NegotiationState]:
         """Get all non-completed negotiations."""
-        async with aiosqlite.connect(self.db_path) as db:
-            async with db.execute(
-                "SELECT data FROM negotiations WHERE status NOT IN ('completed', 'failed')"
-            ) as cursor:
-                rows = await cursor.fetchall()
-                return [NegotiationState.model_validate_json(row[0]) for row in rows]
+        session_factory = get_async_session_factory()
+        async with session_factory() as session:
+            result = await session.execute(
+                select(NegotiationModel).where(
+                    NegotiationModel.status.not_in(["completed", "failed"])
+                )
+            )
+            models = result.scalars().all()
+            return [NegotiationState.model_validate_json(m.data_json) for m in models]
 
     async def save_approval(self, request: ApprovalRequest) -> None:
         """Save or update an approval request."""
-        async with aiosqlite.connect(self.db_path) as db:
-            await db.execute(
-                """INSERT OR REPLACE INTO approvals
-                   (id, negotiation_id, status, data, created_at, resolved_at)
-                   VALUES (?, ?, ?, ?, ?, ?)""",
-                (
-                    request.id,
-                    request.negotiation_id,
-                    request.status.value,
-                    request.model_dump_json(),
-                    request.created_at.isoformat(),
-                    request.resolved_at.isoformat() if request.resolved_at else None,
-                ),
+        session_factory = get_async_session_factory()
+        async with session_factory() as session:
+            # Check if exists
+            result = await session.execute(
+                select(ApprovalModel).where(ApprovalModel.id == request.id)
             )
-            await db.commit()
+            model = result.scalar_one_or_none()
+
+            if model:
+                model.negotiation_id = request.negotiation_id
+                model.status = request.status.value
+                model.data_json = request.model_dump_json()
+                model.resolved_at = request.resolved_at
+            else:
+                model = ApprovalModel(
+                    id=request.id,
+                    negotiation_id=request.negotiation_id,
+                    status=request.status.value,
+                    data_json=request.model_dump_json(),
+                    resolved_at=request.resolved_at,
+                )
+                session.add(model)
+
+            await session.commit()
 
     async def get_approval(self, approval_id: str) -> Optional[ApprovalRequest]:
         """Retrieve an approval request by ID."""
-        async with aiosqlite.connect(self.db_path) as db:
-            async with db.execute(
-                "SELECT data FROM approvals WHERE id = ?", (approval_id,)
-            ) as cursor:
-                row = await cursor.fetchone()
-                if row:
-                    return ApprovalRequest.model_validate_json(row[0])
+        session_factory = get_async_session_factory()
+        async with session_factory() as session:
+            result = await session.execute(
+                select(ApprovalModel).where(ApprovalModel.id == approval_id)
+            )
+            model = result.scalar_one_or_none()
+
+            if model:
+                return ApprovalRequest.model_validate_json(model.data_json)
         return None
 
     async def get_pending_approvals(self) -> list[ApprovalRequest]:
         """Get all pending approval requests."""
-        async with aiosqlite.connect(self.db_path) as db:
-            async with db.execute(
-                "SELECT data FROM approvals WHERE status = ?",
-                (ApprovalStatus.PENDING.value,),
-            ) as cursor:
-                rows = await cursor.fetchall()
-                return [ApprovalRequest.model_validate_json(row[0]) for row in rows]
-
-    async def save_session(self, session: PurchaseSession) -> None:
-        """Save or update a purchase session."""
-        async with aiosqlite.connect(self.db_path) as db:
-            await db.execute(
-                """INSERT OR REPLACE INTO sessions
-                   (id, status, data, created_at, completed_at)
-                   VALUES (?, ?, ?, ?, ?)""",
-                (
-                    session.id,
-                    session.status,
-                    session.model_dump_json(),
-                    session.created_at.isoformat(),
-                    session.completed_at.isoformat() if session.completed_at else None,
-                ),
+        session_factory = get_async_session_factory()
+        async with session_factory() as session:
+            result = await session.execute(
+                select(ApprovalModel).where(
+                    ApprovalModel.status == ApprovalStatus.PENDING.value
+                )
             )
-            await db.commit()
+            models = result.scalars().all()
+            return [ApprovalRequest.model_validate_json(m.data_json) for m in models]
+
+    async def save_session(self, session_obj: PurchaseSession) -> None:
+        """Save or update a purchase session."""
+        session_factory = get_async_session_factory()
+        async with session_factory() as session:
+            # Check if exists
+            result = await session.execute(
+                select(SessionModel).where(SessionModel.id == session_obj.id)
+            )
+            model = result.scalar_one_or_none()
+
+            if model:
+                model.status = session_obj.status
+                model.data_json = session_obj.model_dump_json()
+                model.completed_at = session_obj.completed_at
+            else:
+                model = SessionModel(
+                    id=session_obj.id,
+                    status=session_obj.status,
+                    data_json=session_obj.model_dump_json(),
+                    completed_at=session_obj.completed_at,
+                )
+                session.add(model)
+
+            await session.commit()
 
     async def get_session(self, session_id: str) -> Optional[PurchaseSession]:
         """Retrieve a purchase session by ID."""
-        async with aiosqlite.connect(self.db_path) as db:
-            async with db.execute(
-                "SELECT data FROM sessions WHERE id = ?", (session_id,)
-            ) as cursor:
-                row = await cursor.fetchone()
-                if row:
-                    return PurchaseSession.model_validate_json(row[0])
+        session_factory = get_async_session_factory()
+        async with session_factory() as session:
+            result = await session.execute(
+                select(SessionModel).where(SessionModel.id == session_id)
+            )
+            model = result.scalar_one_or_none()
+
+            if model:
+                return PurchaseSession.model_validate_json(model.data_json)
         return None

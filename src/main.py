@@ -139,7 +139,7 @@ class NegotiationRunner:
     """Main runner for the negotiation workflow."""
 
     def __init__(self):
-        self.store = StateStore(settings.database_path)
+        self.store = StateStore()
         self.whatsapp = create_whatsapp_client(
             settings.whatsapp_bridge_url,
             settings.whatsapp_bridge_ws_url,
@@ -148,12 +148,9 @@ class NegotiationRunner:
 
     async def initialize(self):
         """Initialize the runner and dependencies."""
-        await self.store.initialize()
-        logger.info("Database initialized (aiosqlite)", path=str(settings.database_path))
-
-        # Initialize SQLAlchemy tables
-        await init_db(settings.database_path)
-        logger.info("Database initialized (SQLAlchemy)", path=str(settings.database_path))
+        # Initialize SQLAlchemy tables (includes all models: traces, sellers, negotiations, etc.)
+        await init_db()
+        logger.info("Database initialized", is_postgres=settings.is_postgres)
 
     async def run_single_agent(self, agent_name: str, prompt: str) -> str:
         """Run a single agent with a prompt.

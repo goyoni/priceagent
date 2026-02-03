@@ -6,12 +6,14 @@ them for future use.
 """
 
 import json
-import aiosqlite
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Optional
 
 import structlog
+from sqlalchemy import delete, select
+
+from .base import get_async_session_factory
+from .models import CategoryCriteria
 
 logger = structlog.get_logger()
 
@@ -43,44 +45,36 @@ SEED_CRITERIA = {
 
 
 class CriteriaStore:
-    """Persistent store for product category criteria."""
+    """Persistent store for product category criteria using SQLAlchemy."""
 
-    def __init__(self, db_path: Optional[Path] = None):
-        self.db_path = db_path or Path("data/criteria.db")
+    def __init__(self):
         self._initialized = False
 
     async def initialize(self):
-        """Initialize the database and seed with default criteria."""
+        """Initialize the store and seed with default criteria if empty."""
         if self._initialized:
             return
 
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        session_factory = get_async_session_factory()
+        async with session_factory() as session:
+            # Check if we have any criteria
+            result = await session.execute(select(CategoryCriteria).limit(1))
+            existing = result.scalar_one_or_none()
 
-        async with aiosqlite.connect(self.db_path) as db:
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS category_criteria (
-                    category TEXT PRIMARY KEY,
-                    criteria TEXT NOT NULL,
-                    source TEXT DEFAULT 'discovered',
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
-                )
-            """)
-            await db.commit()
-
-            # Seed with default criteria if empty
-            cursor = await db.execute("SELECT COUNT(*) FROM category_criteria")
-            count = (await cursor.fetchone())[0]
-
-            if count == 0:
-                now = datetime.now(timezone.utc).isoformat()
+            if existing is None:
+                # Seed with default criteria
+                now = datetime.now(timezone.utc)
                 for category, criteria in SEED_CRITERIA.items():
-                    await db.execute(
-                        """INSERT INTO category_criteria (category, criteria, source, created_at, updated_at)
-                           VALUES (?, ?, 'seed', ?, ?)""",
-                        (category, json.dumps(criteria, ensure_ascii=False), now, now)
+                    model = CategoryCriteria(
+                        category=category.lower(),
+                        criteria_json=json.dumps(criteria, ensure_ascii=False),
+                        source="seed",
+                        created_at=now,
+                        updated_at=now,
                     )
-                await db.commit()
+                    session.add(model)
+
+                await session.commit()
                 logger.info("Seeded criteria store", categories=list(SEED_CRITERIA.keys()))
 
         self._initialized = True
@@ -89,47 +83,47 @@ class CriteriaStore:
         """Get criteria for a category. Returns None if not found."""
         await self.initialize()
 
-        async with aiosqlite.connect(self.db_path) as db:
-            cursor = await db.execute(
-                "SELECT criteria FROM category_criteria WHERE category = ?",
-                (category.lower(),)
+        session_factory = get_async_session_factory()
+        async with session_factory() as session:
+            result = await session.execute(
+                select(CategoryCriteria).where(CategoryCriteria.category == category.lower())
             )
-            row = await cursor.fetchone()
+            model = result.scalar_one_or_none()
 
-            if row:
-                return json.loads(row[0])
+            if model:
+                return json.loads(model.criteria_json)
             return None
 
     async def save_criteria(self, category: str, criteria: list[dict], source: str = "discovered"):
         """Save criteria for a category."""
         await self.initialize()
 
-        now = datetime.now(timezone.utc).isoformat()
         criteria_json = json.dumps(criteria, ensure_ascii=False)
+        now = datetime.now(timezone.utc)
 
-        async with aiosqlite.connect(self.db_path) as db:
+        session_factory = get_async_session_factory()
+        async with session_factory() as session:
             # Check if exists
-            cursor = await db.execute(
-                "SELECT 1 FROM category_criteria WHERE category = ?",
-                (category.lower(),)
+            result = await session.execute(
+                select(CategoryCriteria).where(CategoryCriteria.category == category.lower())
             )
-            exists = await cursor.fetchone()
+            model = result.scalar_one_or_none()
 
-            if exists:
-                await db.execute(
-                    """UPDATE category_criteria
-                       SET criteria = ?, source = ?, updated_at = ?
-                       WHERE category = ?""",
-                    (criteria_json, source, now, category.lower())
-                )
+            if model:
+                model.criteria_json = criteria_json
+                model.source = source
+                model.updated_at = now
             else:
-                await db.execute(
-                    """INSERT INTO category_criteria (category, criteria, source, created_at, updated_at)
-                       VALUES (?, ?, ?, ?, ?)""",
-                    (category.lower(), criteria_json, source, now, now)
+                model = CategoryCriteria(
+                    category=category.lower(),
+                    criteria_json=criteria_json,
+                    source=source,
+                    created_at=now,
+                    updated_at=now,
                 )
+                session.add(model)
 
-            await db.commit()
+            await session.commit()
 
         logger.info("Saved category criteria",
                    category=category,
@@ -140,33 +134,35 @@ class CriteriaStore:
         """List all known categories with metadata."""
         await self.initialize()
 
-        async with aiosqlite.connect(self.db_path) as db:
-            cursor = await db.execute(
-                "SELECT category, source, created_at, updated_at FROM category_criteria ORDER BY category"
+        session_factory = get_async_session_factory()
+        async with session_factory() as session:
+            result = await session.execute(
+                select(CategoryCriteria).order_by(CategoryCriteria.category)
             )
-            rows = await cursor.fetchall()
+            models = result.scalars().all()
 
             return [
                 {
-                    "category": row[0],
-                    "source": row[1],
-                    "created_at": row[2],
-                    "updated_at": row[3],
+                    "category": model.category,
+                    "source": model.source,
+                    "criteria_count": len(json.loads(model.criteria_json)),
+                    "created_at": model.created_at.isoformat() if model.created_at else None,
+                    "updated_at": model.updated_at.isoformat() if model.updated_at else None,
                 }
-                for row in rows
+                for model in models
             ]
 
     async def delete_category(self, category: str) -> bool:
         """Delete a category. Returns True if deleted."""
         await self.initialize()
 
-        async with aiosqlite.connect(self.db_path) as db:
-            cursor = await db.execute(
-                "DELETE FROM category_criteria WHERE category = ?",
-                (category.lower(),)
+        session_factory = get_async_session_factory()
+        async with session_factory() as session:
+            result = await session.execute(
+                delete(CategoryCriteria).where(CategoryCriteria.category == category.lower())
             )
-            await db.commit()
-            return cursor.rowcount > 0
+            await session.commit()
+            return result.rowcount > 0
 
 
 # Global instance

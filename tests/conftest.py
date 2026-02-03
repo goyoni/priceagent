@@ -28,16 +28,21 @@ def disable_trace_logging():
 def init_test_database(tmp_path: Path):
     """Initialize test database with all tables for tests that need it."""
     import asyncio
-    from src.db.base import Base, get_engine, _engine, _async_session_factory
+    from src.db.base import Base, get_engine, reset_engine
     from src.db import models  # noqa: F401 - Import to register models
+    from src.config import settings as settings_module
 
     # Reset global engine to use test database
-    import src.db.base as base_module
-    base_module._engine = None
-    base_module._async_session_factory = None
+    reset_engine()
 
-    # Create test database
+    # Ensure we use SQLite for tests (not PostgreSQL)
+    original_database_url = settings_module.settings.database_url
+    settings_module.settings.database_url = None
+
+    # Set the database path to the test temp directory
     test_db_path = tmp_path / "test.db"
+    original_database_path = settings_module.settings.database_path
+    settings_module.settings.database_path = test_db_path
 
     async def init():
         engine = get_engine(test_db_path)
@@ -48,8 +53,9 @@ def init_test_database(tmp_path: Path):
     yield
 
     # Reset after test
-    base_module._engine = None
-    base_module._async_session_factory = None
+    reset_engine()
+    settings_module.settings.database_url = original_database_url
+    settings_module.settings.database_path = original_database_path
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:

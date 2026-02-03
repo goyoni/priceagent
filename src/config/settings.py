@@ -33,9 +33,13 @@ class Settings(BaseSettings):
     )
 
     # Database
+    database_url: Optional[str] = Field(
+        default=None,
+        description="Database URL (PostgreSQL). If not set, uses SQLite.",
+    )
     database_path: Path = Field(
-        default=Path("data/negotiations.db"),
-        description="Path to SQLite database",
+        default=Path("data/app.db"),
+        description="Path to SQLite database (used when database_url is not set)",
     )
 
     # Approval settings
@@ -94,6 +98,11 @@ class Settings(BaseSettings):
     )
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
+
+    @property
+    def is_postgres(self) -> bool:
+        """Check if using PostgreSQL."""
+        return bool(self.database_url and self.database_url.startswith("postgres"))
 
 
 settings = Settings()

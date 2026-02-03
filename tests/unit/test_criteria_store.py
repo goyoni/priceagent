@@ -1,18 +1,22 @@
 """Tests for the criteria store."""
 
 import pytest
-from pathlib import Path
 
-from src.db.criteria_store import CriteriaStore
+from src.db.criteria_store import CriteriaStore, get_criteria_store, set_criteria_store
 
 
 class TestCriteriaStore:
     """Tests for CriteriaStore."""
 
     @pytest.fixture
-    def store(self, tmp_path: Path):
-        """Create a test store with temp db."""
-        return CriteriaStore(db_path=tmp_path / "test_criteria.db")
+    def store(self):
+        """Create a test store using the centralized database."""
+        # The init_test_database fixture in conftest.py sets up the test database
+        store = CriteriaStore()
+        # Reset initialized flag to allow re-seeding for each test
+        store._initialized = False
+        set_criteria_store(store)
+        return store
 
     @pytest.mark.asyncio
     async def test_initialize_creates_tables(self, store):
