@@ -5,11 +5,15 @@ by performing deep research in the user's language, finding real product
 recommendations, and validating they meet the criteria.
 
 Approach:
-1. Research criteria from multiple sources in user's language
-2. Find specific product recommendations from reviews, social media, articles
-3. Search for those specific products in local stores
-4. Validate and score products against criteria
-5. Always provide feedback about what was searched and why
+1. Detect product category and load/discover criteria from persistent store
+2. Research criteria from multiple sources in user's language
+3. Find specific product recommendations from reviews, social media, articles
+4. Search for those specific products in local stores
+5. Validate and score products against criteria
+6. Always provide feedback about what was searched and why
+
+The criteria store learns over time - when a new product category is encountered,
+the agent discovers relevant criteria and saves them for future use.
 """
 
 import json
@@ -24,6 +28,7 @@ from openai import AsyncOpenAI
 from src.tools.scraping import ScraperRegistry
 from src.cache import cached
 from src.observability import report_progress, record_search, record_error, record_warning
+from src.db.criteria_store import get_criteria_store
 
 
 # Country to language mapping
@@ -75,185 +80,6 @@ COUNTRY_LANGUAGES = {
     },
 }
 
-# Category-specific criteria templates - domain knowledge for each product type
-# These ensure the agent considers all important attributes, not just user-specified ones
-CATEGORY_CRITERIA_TEMPLATES = {
-    "oven": {
-        "hebrew": "תנור",
-        "criteria": [
-            {"name": "volume", "hebrew": "נפח", "unit": "liters", "description": "Internal oven capacity"},
-            {"name": "programs", "hebrew": "תכניות", "unit": "count", "description": "Number of cooking programs/modes"},
-            {"name": "cleaning_method", "hebrew": "שיטת ניקוי", "options": ["pyrolytic", "catalytic", "steam", "manual"], "description": "Self-cleaning method"},
-            {"name": "max_temperature", "hebrew": "טמפרטורה מקסימלית", "unit": "°C", "description": "Maximum temperature"},
-            {"name": "energy_rating", "hebrew": "דירוג אנרגיה", "options": ["A+++", "A++", "A+", "A", "B"], "description": "Energy efficiency class"},
-            {"name": "type", "hebrew": "סוג", "options": ["built-in", "freestanding", "range"], "description": "Installation type"},
-            {"name": "width", "hebrew": "רוחב", "unit": "cm", "description": "Standard widths: 60cm, 90cm"},
-            {"name": "convection", "hebrew": "קונבקציה", "options": ["yes", "no"], "description": "Hot air circulation"},
-            {"name": "grill", "hebrew": "גריל", "options": ["yes", "no"], "description": "Built-in grill function"},
-        ],
-    },
-    "stove": {
-        "hebrew": "תנור",
-        "criteria": [
-            {"name": "volume", "hebrew": "נפח", "unit": "liters", "description": "Internal oven capacity"},
-            {"name": "programs", "hebrew": "תכניות", "unit": "count", "description": "Number of cooking programs/modes"},
-            {"name": "cleaning_method", "hebrew": "שיטת ניקוי", "options": ["pyrolytic", "catalytic", "steam", "manual"], "description": "Self-cleaning method"},
-            {"name": "max_temperature", "hebrew": "טמפרטורה מקסימלית", "unit": "°C", "description": "Maximum temperature"},
-            {"name": "energy_rating", "hebrew": "דירוג אנרגיה", "options": ["A+++", "A++", "A+", "A", "B"], "description": "Energy efficiency class"},
-            {"name": "type", "hebrew": "סוג", "options": ["built-in", "freestanding", "range"], "description": "Installation type"},
-            {"name": "width", "hebrew": "רוחב", "unit": "cm", "description": "Standard widths: 60cm, 90cm"},
-            {"name": "convection", "hebrew": "קונבקציה", "options": ["yes", "no"], "description": "Hot air circulation"},
-            {"name": "grill", "hebrew": "גריל", "options": ["yes", "no"], "description": "Built-in grill function"},
-        ],
-    },
-    "refrigerator": {
-        "hebrew": "מקרר",
-        "criteria": [
-            {"name": "total_volume", "hebrew": "נפח כולל", "unit": "liters", "description": "Total storage capacity"},
-            {"name": "freezer_volume", "hebrew": "נפח מקפיא", "unit": "liters", "description": "Freezer capacity"},
-            {"name": "noise_level", "hebrew": "רמת רעש", "unit": "dB", "description": "Operating noise in decibels"},
-            {"name": "energy_rating", "hebrew": "דירוג אנרגיה", "options": ["A+++", "A++", "A+", "A", "B"], "description": "Energy efficiency class"},
-            {"name": "type", "hebrew": "סוג", "options": ["top-freezer", "bottom-freezer", "side-by-side", "french-door"], "description": "Configuration type"},
-            {"name": "no_frost", "hebrew": "נו פרוסט", "options": ["yes", "no"], "description": "No-frost technology"},
-            {"name": "water_dispenser", "hebrew": "מתקן מים", "options": ["yes", "no"], "description": "Built-in water dispenser"},
-            {"name": "ice_maker", "hebrew": "מכונת קרח", "options": ["yes", "no"], "description": "Built-in ice maker"},
-            {"name": "width", "hebrew": "רוחב", "unit": "cm", "description": "Standard widths: 60cm, 70cm, 90cm"},
-        ],
-    },
-    "fridge": {
-        "hebrew": "מקרר",
-        "criteria": [
-            {"name": "total_volume", "hebrew": "נפח כולל", "unit": "liters", "description": "Total storage capacity"},
-            {"name": "freezer_volume", "hebrew": "נפח מקפיא", "unit": "liters", "description": "Freezer capacity"},
-            {"name": "noise_level", "hebrew": "רמת רעש", "unit": "dB", "description": "Operating noise in decibels"},
-            {"name": "energy_rating", "hebrew": "דירוג אנרגיה", "options": ["A+++", "A++", "A+", "A", "B"], "description": "Energy efficiency class"},
-            {"name": "type", "hebrew": "סוג", "options": ["top-freezer", "bottom-freezer", "side-by-side", "french-door"], "description": "Configuration type"},
-            {"name": "no_frost", "hebrew": "נו פרוסט", "options": ["yes", "no"], "description": "No-frost technology"},
-            {"name": "water_dispenser", "hebrew": "מתקן מים", "options": ["yes", "no"], "description": "Built-in water dispenser"},
-            {"name": "ice_maker", "hebrew": "מכונת קרח", "options": ["yes", "no"], "description": "Built-in ice maker"},
-            {"name": "width", "hebrew": "רוחב", "unit": "cm", "description": "Standard widths: 60cm, 70cm, 90cm"},
-        ],
-    },
-    "washing_machine": {
-        "hebrew": "מכונת כביסה",
-        "criteria": [
-            {"name": "capacity", "hebrew": "קיבולת", "unit": "kg", "description": "Load capacity in kg"},
-            {"name": "spin_speed", "hebrew": "מהירות סחיטה", "unit": "rpm", "description": "Maximum spin speed"},
-            {"name": "noise_level", "hebrew": "רמת רעש", "unit": "dB", "description": "Operating noise"},
-            {"name": "energy_rating", "hebrew": "דירוג אנרגיה", "options": ["A+++", "A++", "A+", "A", "B"], "description": "Energy efficiency class"},
-            {"name": "programs", "hebrew": "תכניות", "unit": "count", "description": "Number of wash programs"},
-            {"name": "steam", "hebrew": "קיטור", "options": ["yes", "no"], "description": "Steam washing function"},
-            {"name": "inverter", "hebrew": "אינוורטר", "options": ["yes", "no"], "description": "Inverter motor technology"},
-            {"name": "quick_wash", "hebrew": "כביסה מהירה", "options": ["yes", "no"], "description": "Quick wash cycle"},
-        ],
-    },
-    "dishwasher": {
-        "hebrew": "מדיח כלים",
-        "criteria": [
-            {"name": "place_settings", "hebrew": "מערכות כלים", "unit": "sets", "description": "Number of place settings"},
-            {"name": "noise_level", "hebrew": "רמת רעש", "unit": "dB", "description": "Operating noise in decibels"},
-            {"name": "energy_rating", "hebrew": "דירוג אנרגיה", "options": ["A+++", "A++", "A+", "A", "B"], "description": "Energy efficiency class"},
-            {"name": "programs", "hebrew": "תכניות", "unit": "count", "description": "Number of wash programs"},
-            {"name": "width", "hebrew": "רוחב", "unit": "cm", "description": "Standard widths: 45cm, 60cm"},
-            {"name": "half_load", "hebrew": "חצי מילוי", "options": ["yes", "no"], "description": "Half load option"},
-            {"name": "quick_wash", "hebrew": "שטיפה מהירה", "options": ["yes", "no"], "description": "Quick wash cycle"},
-            {"name": "third_rack", "hebrew": "סל שלישי", "options": ["yes", "no"], "description": "Third rack for cutlery"},
-        ],
-    },
-    "air_conditioner": {
-        "hebrew": "מזגן",
-        "criteria": [
-            {"name": "cooling_capacity", "hebrew": "הספק קירור", "unit": "BTU", "description": "Cooling capacity in BTU"},
-            {"name": "noise_level", "hebrew": "רמת רעש", "unit": "dB", "description": "Indoor unit noise level"},
-            {"name": "energy_rating", "hebrew": "דירוג אנרגיה", "options": ["A+++", "A++", "A+", "A", "B"], "description": "Energy efficiency class"},
-            {"name": "inverter", "hebrew": "אינוורטר", "options": ["yes", "no"], "description": "Inverter technology"},
-            {"name": "wifi", "hebrew": "וייפי", "options": ["yes", "no"], "description": "WiFi connectivity"},
-            {"name": "heating", "hebrew": "חימום", "options": ["yes", "no"], "description": "Heating function"},
-            {"name": "room_size", "hebrew": "גודל חדר", "unit": "sqm", "description": "Recommended room size"},
-        ],
-    },
-    "tv": {
-        "hebrew": "טלוויזיה",
-        "criteria": [
-            {"name": "screen_size", "hebrew": "גודל מסך", "unit": "inches", "description": "Screen diagonal"},
-            {"name": "resolution", "hebrew": "רזולוציה", "options": ["4K", "8K", "Full HD", "HD"], "description": "Display resolution"},
-            {"name": "panel_type", "hebrew": "סוג פאנל", "options": ["OLED", "QLED", "LED", "Mini-LED"], "description": "Display technology"},
-            {"name": "refresh_rate", "hebrew": "קצב רענון", "unit": "Hz", "description": "Refresh rate"},
-            {"name": "smart_tv", "hebrew": "סמארט", "options": ["yes", "no"], "description": "Smart TV features"},
-            {"name": "hdmi_ports", "hebrew": "יציאות HDMI", "unit": "count", "description": "Number of HDMI ports"},
-            {"name": "hdr", "hebrew": "HDR", "options": ["HDR10", "Dolby Vision", "HDR10+", "none"], "description": "HDR support"},
-        ],
-    },
-}
-
-
-def detect_product_category(requirement: str) -> tuple[str, dict]:
-    """Detect the product category from user requirement and return criteria template.
-
-    Returns:
-        Tuple of (category_key, criteria_template) or (None, {}) if not detected
-    """
-    requirement_lower = requirement.lower()
-
-    category_keywords = {
-        "oven": ["oven", "תנור אפייה", "תנור בילט אין"],
-        "stove": ["stove", "תנור", "כיריים", "range"],
-        "refrigerator": ["refrigerator", "fridge", "מקרר"],
-        "washing_machine": ["washing machine", "מכונת כביסה", "washer"],
-        "dishwasher": ["dishwasher", "מדיח כלים", "מדיח"],
-        "air_conditioner": ["air conditioner", "מזגן", "ac", "a/c"],
-        "tv": ["tv", "television", "טלוויזיה"],
-    }
-
-    for category, keywords in category_keywords.items():
-        for keyword in keywords:
-            if keyword in requirement_lower:
-                return category, CATEGORY_CRITERIA_TEMPLATES.get(category, {})
-
-    return None, {}
-
-# Product type translations for common appliances
-PRODUCT_TRANSLATIONS = {
-    "he": {
-        "refrigerator": "מקרר",
-        "fridge": "מקרר",
-        "washing machine": "מכונת כביסה",
-        "dishwasher": "מדיח כלים",
-        "air conditioner": "מזגן",
-        "oven": "תנור",
-        "dryer": "מייבש כביסה",
-        "microwave": "מיקרוגל",
-        "freezer": "מקפיא",
-        "vacuum": "שואב אבק",
-        "tv": "טלוויזיה",
-        "television": "טלוויזיה",
-        "laptop": "מחשב נייד",
-        "phone": "טלפון",
-        "quiet": "שקט",
-        "silent": "שקט",
-        "family": "משפחה",
-        "large": "גדול",
-        "small": "קטן",
-        "energy efficient": "חסכוני באנרגיה",
-    },
-    "de": {
-        "refrigerator": "Kühlschrank",
-        "fridge": "Kühlschrank",
-        "washing machine": "Waschmaschine",
-        "dishwasher": "Geschirrspüler",
-        "quiet": "leise",
-        "silent": "leise",
-    },
-    "fr": {
-        "refrigerator": "réfrigérateur",
-        "fridge": "réfrigérateur",
-        "washing machine": "lave-linge",
-        "dishwasher": "lave-vaisselle",
-        "quiet": "silencieux",
-        "silent": "silencieux",
-    },
-}
-
 
 def get_country_info(country: str) -> dict:
     """Get language and currency info for a country."""
@@ -268,34 +94,150 @@ def get_country_info(country: str) -> dict:
     })
 
 
-def translate_query_to_native(query: str, lang_code: str) -> str:
-    """Translate an English query to the native language using word-level translation.
-
-    This ensures searches are performed in the local language even if
-    the user typed in English.
-    """
-    if lang_code == "en" or lang_code not in PRODUCT_TRANSLATIONS:
-        return query
-
-    translations = PRODUCT_TRANSLATIONS[lang_code]
-    translated = query.lower()
-
-    # Sort by length (longest first) to avoid partial replacements
-    sorted_terms = sorted(translations.keys(), key=len, reverse=True)
-
-    for eng_term in sorted_terms:
-        if eng_term in translated:
-            translated = translated.replace(eng_term, translations[eng_term])
-
-    return translated
-
-
 def get_openai_client() -> AsyncOpenAI:
     """Get OpenAI client with API key from environment."""
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         raise ValueError("OPENAI_API_KEY environment variable not set")
     return AsyncOpenAI(api_key=api_key)
+
+
+async def detect_category_with_llm(requirement: str) -> str:
+    """Use LLM to detect the product category from a user requirement.
+
+    Returns a normalized category name (e.g., "refrigerator", "car", "laptop").
+    """
+    client = get_openai_client()
+
+    response = await client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": """You are a product category classifier.
+Given a user's product requirement, identify the main product category.
+Return ONLY the category name in lowercase English, nothing else.
+Examples:
+- "quiet fridge for family" -> refrigerator
+- "מזגן שקט לחדר שינה" -> air_conditioner
+- "looking for a Tesla Model 3" -> car
+- "best laptop for programming" -> laptop
+- "תנור בילט אין" -> oven
+Use underscores for multi-word categories (e.g., washing_machine, air_conditioner)."""},
+            {"role": "user", "content": requirement}
+        ],
+        temperature=0,
+        max_tokens=50,
+    )
+
+    category = response.choices[0].message.content.strip().lower()
+    # Normalize: remove quotes, extra spaces
+    category = category.strip('"\'').replace(" ", "_")
+    return category
+
+
+async def discover_category_criteria(category: str) -> list[dict]:
+    """Use LLM to discover important criteria for a product category.
+
+    This is called when we encounter a new category not in our store.
+    The discovered criteria are saved for future use.
+    """
+    client = get_openai_client()
+
+    response = await client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": """You are a product expert.
+Given a product category, list the 6-10 most important criteria that buyers should consider.
+For each criterion, provide:
+- name: short English name (snake_case)
+- description: what this criterion measures/means
+- unit: measurement unit if applicable (e.g., "liters", "dB", "kg", "count")
+- options: array of common options if it's a choice (e.g., ["yes", "no"], ["A+++", "A++", "A+"])
+
+Focus on criteria that:
+1. Significantly impact user satisfaction
+2. Vary meaningfully between products
+3. Can be compared objectively
+
+Return valid JSON array only, no markdown."""},
+            {"role": "user", "content": f"What are the most important criteria for buying a {category}?"}
+        ],
+        temperature=0.3,
+        max_tokens=1500,
+    )
+
+    result_text = response.choices[0].message.content.strip()
+
+    # Clean up response
+    if result_text.startswith("```"):
+        result_text = re.sub(r'^```(?:json)?\n?', '', result_text)
+        result_text = re.sub(r'\n?```$', '', result_text)
+
+    try:
+        criteria = json.loads(result_text)
+        return criteria
+    except json.JSONDecodeError:
+        # Fallback: return empty list, let research phase handle it
+        return []
+
+
+async def get_or_discover_criteria(category: str) -> list[dict]:
+    """Get criteria from store, or discover and save if not found.
+
+    This is the main entry point for getting category criteria.
+    """
+    import structlog
+    logger = structlog.get_logger()
+
+    store = get_criteria_store()
+
+    # Try to get from store
+    criteria = await store.get_criteria(category)
+
+    if criteria:
+        logger.info("Loaded criteria from store", category=category, count=len(criteria))
+        return criteria
+
+    # Not found - discover new criteria
+    await report_progress(
+        "🔬 Learning new category",
+        f"Discovering criteria for '{category}' (will be saved for future use)"
+    )
+
+    criteria = await discover_category_criteria(category)
+
+    if criteria:
+        # Save to store for future use
+        await store.save_criteria(category, criteria, source="discovered")
+        logger.info("Discovered and saved criteria", category=category, count=len(criteria))
+    else:
+        logger.warning("Could not discover criteria", category=category)
+
+    return criteria
+
+
+async def translate_query_for_search(query: str, target_language: str) -> str:
+    """Translate a query to the target language using LLM.
+
+    This replaces hardcoded translation dictionaries with dynamic translation.
+    """
+    if target_language.lower() == "english":
+        return query
+
+    client = get_openai_client()
+
+    response = await client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": f"""Translate the following product search query to {target_language}.
+Keep it natural for a product search - use common local terms.
+Return ONLY the translated text, nothing else."""},
+            {"role": "user", "content": query}
+        ],
+        temperature=0,
+        max_tokens=200,
+    )
+
+    return response.choices[0].message.content.strip()
 
 
 # ============================================================================
@@ -309,11 +251,12 @@ async def _research_and_discover_impl(
     """Perform deep research to understand product criteria and find recommendations.
 
     This tool:
-    1. Detects the product category and loads domain-specific criteria
-    2. Searches in the user's language for buying guides and expert recommendations
-    3. Looks for specific product recommendations from reviews, social media, news
-    4. Extracts realistic, research-backed criteria + category-specific attributes
-    5. Returns both criteria AND specific product model recommendations (5+ different models)
+    1. Detects the product category using LLM
+    2. Loads criteria from store, or discovers and saves them if new category
+    3. Searches in the user's language for buying guides and expert recommendations
+    4. Looks for specific product recommendations from reviews, social media, news
+    5. Extracts realistic, research-backed criteria + category-specific attributes
+    6. Returns both criteria AND specific product model recommendations (5+ different models)
 
     Args:
         requirement: User's natural language requirement
@@ -331,19 +274,26 @@ async def _research_and_discover_impl(
     lang_code = country_info["code"]
     currency = country_info["currency"]
 
-    # Detect product category and get criteria template
-    category_key, category_template = detect_product_category(requirement)
-    category_criteria = category_template.get("criteria", []) if category_template else []
-
     await report_progress(
         "🔍 Researching",
         f"Searching for expert recommendations in {language}..."
     )
 
-    if category_key:
+    # Detect product category using LLM (works for any product, any language)
+    category_key = await detect_category_with_llm(requirement)
+
+    await report_progress(
+        "📋 Category detected",
+        f"'{category_key}' - Loading or discovering criteria..."
+    )
+
+    # Get criteria from store, or discover and save if new category
+    category_criteria = await get_or_discover_criteria(category_key)
+
+    if category_criteria:
         await report_progress(
-            "📋 Category detected",
-            f"{category_key} - Loading {len(category_criteria)} domain criteria (volume, programs, cleaning, etc.)"
+            "✅ Criteria loaded",
+            f"{len(category_criteria)} criteria for {category_key}: {', '.join([c.get('name', '') for c in category_criteria[:5]])}"
         )
 
     # Collect research from web searches
@@ -354,16 +304,19 @@ async def _research_and_discover_impl(
         "social_mentions": [],
     }
 
-    # Use direct Google scraping for research
-    import re
+    # Translate query to native language for better search results
+    native_query = await translate_query_for_search(requirement, language)
+
     GOOGLE_HEADERS = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": f"{lang_code}-{country},{lang_code};q=0.9,en-US;q=0.8,en;q=0.7",
     }
 
-    # Search queries in user's language
-    search_queries = _generate_research_queries(requirement, language, lang_code)
+    # Generate search queries dynamically
+    search_queries = await _generate_research_queries_dynamic(
+        requirement, native_query, category_key, language, lang_code
+    )
 
     for query_info in search_queries[:4]:  # Limit to 4 queries
         try:
@@ -684,6 +637,72 @@ def _parse_google_search_results(html: str) -> list[dict]:
             continue
 
     return results
+
+
+async def _generate_research_queries_dynamic(
+    requirement: str,
+    native_query: str,
+    category: str,
+    language: str,
+    lang_code: str
+) -> list:
+    """Generate research queries dynamically using LLM.
+
+    This replaces hardcoded query templates with dynamic generation
+    that works for any product category and language.
+    """
+    client = get_openai_client()
+
+    response = await client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": f"""Generate 4-5 search queries for product research.
+Target language: {language}
+Product category: {category}
+
+Generate queries that will find:
+1. Buying guides and comparison articles
+2. Expert recommendations and reviews
+3. Community discussions (forums, Reddit, etc.)
+4. Specific product model recommendations
+
+Each query should be in {language} (except one English query for international research).
+Keep queries natural and similar to what a local user would search.
+
+Return JSON array:
+[{{"query": "search query text", "purpose": "brief description", "category": "buying_guides|product_recommendations|expert_opinions|social_mentions"}}]
+
+Return ONLY valid JSON, no markdown."""},
+            {"role": "user", "content": f"User requirement: {requirement}\nTranslated query: {native_query}"}
+        ],
+        temperature=0.3,
+        max_tokens=800,
+    )
+
+    result_text = response.choices[0].message.content.strip()
+
+    # Clean up response
+    if result_text.startswith("```"):
+        result_text = re.sub(r'^```(?:json)?\n?', '', result_text)
+        result_text = re.sub(r'\n?```$', '', result_text)
+
+    try:
+        queries = json.loads(result_text)
+        return queries
+    except json.JSONDecodeError:
+        # Fallback: return basic queries
+        return [
+            {
+                "query": f"{native_query} recommended 2024",
+                "purpose": "Finding recommended models",
+                "category": "product_recommendations"
+            },
+            {
+                "query": f"{native_query} reviews buying guide",
+                "purpose": "Buying guide",
+                "category": "buying_guides"
+            },
+        ]
 
 
 def _generate_research_queries(requirement: str, language: str, lang_code: str) -> list:
