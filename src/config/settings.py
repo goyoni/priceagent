@@ -66,6 +66,12 @@ class Settings(BaseSettings):
         description="Environment: 'development' or 'production'",
     )
 
+    # Tracing settings
+    trace_enabled: bool = Field(
+        default=True,
+        description="Enable trace logging (disable for tests)",
+    )
+
     # Cache settings
     cache_enabled: bool = Field(default=True, description="Enable caching")
     cache_path: Path = Field(

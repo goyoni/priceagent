@@ -1,6 +1,7 @@
 """Pytest configuration and fixtures for e2e testing."""
 
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -9,6 +10,19 @@ from unittest.mock import patch
 import pytest
 
 CASSETTES_DIR = Path(__file__).parent / "fixtures" / "cassettes"
+
+
+@pytest.fixture(autouse=True)
+def disable_trace_logging():
+    """Disable trace logging for all tests to prevent test traces from polluting storage."""
+    original = os.environ.get("TRACE_ENABLED")
+    os.environ["TRACE_ENABLED"] = "false"
+    yield
+    # Restore original value
+    if original is not None:
+        os.environ["TRACE_ENABLED"] = original
+    else:
+        os.environ.pop("TRACE_ENABLED", None)
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -59,7 +73,7 @@ def mock_cache_manager(tmp_path: Path):
 
 @pytest.fixture
 def mock_settings(tmp_path: Path):
-    """Test settings with cache enabled."""
+    """Test settings with cache enabled and tracing disabled."""
     from src.config.settings import Settings
 
     # Create a test settings instance
@@ -70,6 +84,7 @@ def mock_settings(tmp_path: Path):
         cache_ttl_scraper_hours=24,
         cache_ttl_contact_days=7,
         cache_ttl_agent_hours=24,
+        trace_enabled=False,  # Disable tracing in tests
     )
 
     with patch("src.config.settings.settings", test_settings):

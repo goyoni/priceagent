@@ -3,6 +3,7 @@
 import asyncio
 import json
 from collections import defaultdict
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -26,8 +27,13 @@ class TraceStore:
         # Load existing traces from disk
         self._load_from_disk()
 
-    async def create_trace(self, input_prompt: str, session_id: Optional[str] = None, parent_trace_id: Optional[str] = None) -> Trace:
-        """Create and store a new trace."""
+    async def create_trace(self, input_prompt: str, session_id: Optional[str] = None, parent_trace_id: Optional[str] = None) -> Optional[Trace]:
+        """Create and store a new trace. Returns None if tracing is disabled."""
+        # Check if tracing is enabled (import here to avoid circular imports)
+        from src.config.settings import settings
+        if not settings.trace_enabled:
+            return None
+
         trace = Trace(input_prompt=input_prompt, session_id=session_id, parent_trace_id=parent_trace_id)
 
         async with self._lock:
@@ -194,6 +200,56 @@ class TraceStore:
 
         self._save_to_disk()
         return True
+
+    def clear_stale_traces(self, stuck_timeout_minutes: int = 60) -> dict:
+        """Clear stale traces (stuck in RUNNING state for too long).
+
+        Args:
+            stuck_timeout_minutes: Consider traces stuck if running longer than this
+
+        Returns:
+            Dict with counts of deleted traces by reason
+        """
+        now = datetime.now(timezone.utc)
+        stuck_threshold = now - timedelta(minutes=stuck_timeout_minutes)
+
+        deleted_stuck = 0
+        trace_ids_to_delete = []
+
+        for trace_id, trace in self._traces.items():
+            # Delete traces stuck in RUNNING state
+            if trace.status == SpanStatus.RUNNING:
+                if trace.started_at < stuck_threshold:
+                    trace_ids_to_delete.append(trace_id)
+                    deleted_stuck += 1
+
+        # Delete collected traces
+        for trace_id in trace_ids_to_delete:
+            del self._traces[trace_id]
+            self._spans.pop(trace_id, None)
+            if trace_id in self._trace_order:
+                self._trace_order.remove(trace_id)
+
+        if trace_ids_to_delete:
+            self._save_to_disk()
+
+        return {
+            "deleted_stuck": deleted_stuck,
+            "total_deleted": len(trace_ids_to_delete),
+        }
+
+    def clear_all_traces(self) -> int:
+        """Clear all traces from the store.
+
+        Returns:
+            Number of traces deleted
+        """
+        count = len(self._traces)
+        self._traces.clear()
+        self._spans.clear()
+        self._trace_order.clear()
+        self._save_to_disk()
+        return count
 
     # Disk persistence
 

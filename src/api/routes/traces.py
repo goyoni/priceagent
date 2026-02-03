@@ -222,6 +222,29 @@ async def delete_trace(trace_id: str, _auth: bool = Depends(verify_dashboard_aut
     return {"status": "deleted", "trace_id": trace_id}
 
 
+@router.delete("/")
+async def clear_all_traces(_auth: bool = Depends(verify_dashboard_auth)):
+    """Clear all traces from storage."""
+    store = get_trace_store()
+    count = store.clear_all_traces()
+    return {"status": "cleared", "deleted_count": count}
+
+
+@router.post("/cleanup")
+async def cleanup_stale_traces(
+    stuck_timeout_minutes: int = Query(default=60, ge=1, le=1440),
+    _auth: bool = Depends(verify_dashboard_auth),
+):
+    """Clean up stale traces (stuck in RUNNING state).
+
+    Args:
+        stuck_timeout_minutes: Delete traces running longer than this (default: 60)
+    """
+    store = get_trace_store()
+    result = store.clear_stale_traces(stuck_timeout_minutes=stuck_timeout_minutes)
+    return {"status": "cleaned", **result}
+
+
 @router.websocket("/ws")
 async def trace_websocket(websocket: WebSocket):
     """WebSocket endpoint for real-time trace updates."""
