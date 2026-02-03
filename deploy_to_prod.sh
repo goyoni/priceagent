@@ -102,13 +102,6 @@ echo -e "${YELLOW}Pushing to origin...${NC}"
 git push origin main
 git push origin "$VERSION"
 
-# Build for production
-echo ""
-echo -e "${YELLOW}Building for production...${NC}"
-cd "$PROJECT_DIR/frontend"
-npm run build
-cd "$PROJECT_DIR"
-
 echo ""
 echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}  Production deployment complete!      ${NC}"
@@ -118,7 +111,6 @@ echo ""
 echo "Summary:"
 echo "  - Merged development -> main"
 echo "  - Created tag: ${VERSION}"
-echo "  - Built frontend for production"
 echo ""
 echo "To run production:"
 echo "  ./run.sh"
