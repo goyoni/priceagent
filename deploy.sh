@@ -112,6 +112,18 @@ echo ""
 echo -e "${GREEN}All tests passed!${NC}"
 echo ""
 
+# Build frontend for static deployment
+echo -e "${YELLOW}Building frontend...${NC}"
+cd "$PROJECT_DIR/frontend"
+if npm run build; then
+    echo -e "${GREEN}✓${NC} Frontend built (static files in frontend/out/)"
+else
+    echo -e "${RED}✗${NC} Frontend build failed"
+    echo -e "${RED}Deployment aborted. Fix build errors before deploying.${NC}"
+    exit 1
+fi
+cd "$PROJECT_DIR"
+
 # Stage all changes
 echo -e "${YELLOW}Staging changes...${NC}"
 git add -A
