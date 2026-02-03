@@ -5,11 +5,15 @@ by performing deep research in the user's language, finding real product
 recommendations, and validating they meet the criteria.
 
 Approach:
-1. Research criteria from multiple sources in user's language
-2. Find specific product recommendations from reviews, social media, articles
-3. Search for those specific products in local stores
-4. Validate and score products against criteria
-5. Always provide feedback about what was searched and why
+1. Detect product category and load/discover criteria from persistent store
+2. Research criteria from multiple sources in user's language
+3. Find specific product recommendations from reviews, social media, articles
+4. Search for those specific products in local stores
+5. Validate and score products against criteria
+6. Always provide feedback about what was searched and why
+
+The criteria store learns over time - when a new product category is encountered,
+the agent discovers relevant criteria and saves them for future use.
 """
 
 import json
@@ -24,6 +28,7 @@ from openai import AsyncOpenAI
 from src.tools.scraping import ScraperRegistry
 from src.cache import cached
 from src.observability import report_progress, record_search, record_error, record_warning
+from src.db.criteria_store import get_criteria_store
 from src.agents.product_matching import (
     parse_multi_product_query,
     find_matched_sets,
@@ -81,48 +86,6 @@ COUNTRY_LANGUAGES = {
     },
 }
 
-# Product type translations for common appliances
-PRODUCT_TRANSLATIONS = {
-    "he": {
-        "refrigerator": "מקרר",
-        "fridge": "מקרר",
-        "washing machine": "מכונת כביסה",
-        "dishwasher": "מדיח כלים",
-        "air conditioner": "מזגן",
-        "oven": "תנור",
-        "dryer": "מייבש כביסה",
-        "microwave": "מיקרוגל",
-        "freezer": "מקפיא",
-        "vacuum": "שואב אבק",
-        "tv": "טלוויזיה",
-        "television": "טלוויזיה",
-        "laptop": "מחשב נייד",
-        "phone": "טלפון",
-        "quiet": "שקט",
-        "silent": "שקט",
-        "family": "משפחה",
-        "large": "גדול",
-        "small": "קטן",
-        "energy efficient": "חסכוני באנרגיה",
-    },
-    "de": {
-        "refrigerator": "Kühlschrank",
-        "fridge": "Kühlschrank",
-        "washing machine": "Waschmaschine",
-        "dishwasher": "Geschirrspüler",
-        "quiet": "leise",
-        "silent": "leise",
-    },
-    "fr": {
-        "refrigerator": "réfrigérateur",
-        "fridge": "réfrigérateur",
-        "washing machine": "lave-linge",
-        "dishwasher": "lave-vaisselle",
-        "quiet": "silencieux",
-        "silent": "silencieux",
-    },
-}
-
 
 def get_country_info(country: str) -> dict:
     """Get language and currency info for a country."""
@@ -137,34 +100,150 @@ def get_country_info(country: str) -> dict:
     })
 
 
-def translate_query_to_native(query: str, lang_code: str) -> str:
-    """Translate an English query to the native language using word-level translation.
-
-    This ensures searches are performed in the local language even if
-    the user typed in English.
-    """
-    if lang_code == "en" or lang_code not in PRODUCT_TRANSLATIONS:
-        return query
-
-    translations = PRODUCT_TRANSLATIONS[lang_code]
-    translated = query.lower()
-
-    # Sort by length (longest first) to avoid partial replacements
-    sorted_terms = sorted(translations.keys(), key=len, reverse=True)
-
-    for eng_term in sorted_terms:
-        if eng_term in translated:
-            translated = translated.replace(eng_term, translations[eng_term])
-
-    return translated
-
-
 def get_openai_client() -> AsyncOpenAI:
     """Get OpenAI client with API key from environment."""
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         raise ValueError("OPENAI_API_KEY environment variable not set")
     return AsyncOpenAI(api_key=api_key)
+
+
+async def detect_category_with_llm(requirement: str) -> str:
+    """Use LLM to detect the product category from a user requirement.
+
+    Returns a normalized category name (e.g., "refrigerator", "car", "laptop").
+    """
+    client = get_openai_client()
+
+    response = await client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": """You are a product category classifier.
+Given a user's product requirement, identify the main product category.
+Return ONLY the category name in lowercase English, nothing else.
+Examples:
+- "quiet fridge for family" -> refrigerator
+- "מזגן שקט לחדר שינה" -> air_conditioner
+- "looking for a Tesla Model 3" -> car
+- "best laptop for programming" -> laptop
+- "תנור בילט אין" -> oven
+Use underscores for multi-word categories (e.g., washing_machine, air_conditioner)."""},
+            {"role": "user", "content": requirement}
+        ],
+        temperature=0,
+        max_tokens=50,
+    )
+
+    category = response.choices[0].message.content.strip().lower()
+    # Normalize: remove quotes, extra spaces
+    category = category.strip('"\'').replace(" ", "_")
+    return category
+
+
+async def discover_category_criteria(category: str) -> list[dict]:
+    """Use LLM to discover important criteria for a product category.
+
+    This is called when we encounter a new category not in our store.
+    The discovered criteria are saved for future use.
+    """
+    client = get_openai_client()
+
+    response = await client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": """You are a product expert.
+Given a product category, list the 6-10 most important criteria that buyers should consider.
+For each criterion, provide:
+- name: short English name (snake_case)
+- description: what this criterion measures/means
+- unit: measurement unit if applicable (e.g., "liters", "dB", "kg", "count")
+- options: array of common options if it's a choice (e.g., ["yes", "no"], ["A+++", "A++", "A+"])
+
+Focus on criteria that:
+1. Significantly impact user satisfaction
+2. Vary meaningfully between products
+3. Can be compared objectively
+
+Return valid JSON array only, no markdown."""},
+            {"role": "user", "content": f"What are the most important criteria for buying a {category}?"}
+        ],
+        temperature=0.3,
+        max_tokens=1500,
+    )
+
+    result_text = response.choices[0].message.content.strip()
+
+    # Clean up response
+    if result_text.startswith("```"):
+        result_text = re.sub(r'^```(?:json)?\n?', '', result_text)
+        result_text = re.sub(r'\n?```$', '', result_text)
+
+    try:
+        criteria = json.loads(result_text)
+        return criteria
+    except json.JSONDecodeError:
+        # Fallback: return empty list, let research phase handle it
+        return []
+
+
+async def get_or_discover_criteria(category: str) -> list[dict]:
+    """Get criteria from store, or discover and save if not found.
+
+    This is the main entry point for getting category criteria.
+    """
+    import structlog
+    logger = structlog.get_logger()
+
+    store = get_criteria_store()
+
+    # Try to get from store
+    criteria = await store.get_criteria(category)
+
+    if criteria:
+        logger.info("Loaded criteria from store", category=category, count=len(criteria))
+        return criteria
+
+    # Not found - discover new criteria
+    await report_progress(
+        "🔬 Learning new category",
+        f"Discovering criteria for '{category}' (will be saved for future use)"
+    )
+
+    criteria = await discover_category_criteria(category)
+
+    if criteria:
+        # Save to store for future use
+        await store.save_criteria(category, criteria, source="discovered")
+        logger.info("Discovered and saved criteria", category=category, count=len(criteria))
+    else:
+        logger.warning("Could not discover criteria", category=category)
+
+    return criteria
+
+
+async def translate_query_for_search(query: str, target_language: str) -> str:
+    """Translate a query to the target language using LLM.
+
+    This replaces hardcoded translation dictionaries with dynamic translation.
+    """
+    if target_language.lower() == "english":
+        return query
+
+    client = get_openai_client()
+
+    response = await client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": f"""Translate the following product search query to {target_language}.
+Keep it natural for a product search - use common local terms.
+Return ONLY the translated text, nothing else."""},
+            {"role": "user", "content": query}
+        ],
+        temperature=0,
+        max_tokens=200,
+    )
+
+    return response.choices[0].message.content.strip()
 
 
 # ============================================================================
@@ -178,10 +257,12 @@ async def _research_and_discover_impl(
     """Perform deep research to understand product criteria and find recommendations.
 
     This tool:
-    1. Searches in the user's language for buying guides and expert recommendations
-    2. Looks for specific product recommendations from reviews, social media, news
-    3. Extracts realistic, research-backed criteria
-    4. Returns both criteria AND specific product recommendations
+    1. Detects the product category using LLM
+    2. Loads criteria from store, or discovers and saves them if new category
+    3. Searches in the user's language for buying guides and expert recommendations
+    4. Looks for specific product recommendations from reviews, social media, news
+    5. Extracts realistic, research-backed criteria + category-specific attributes
+    6. Returns both criteria AND specific product model recommendations (5+ different models)
 
     Args:
         requirement: User's natural language requirement
@@ -204,6 +285,23 @@ async def _research_and_discover_impl(
         f"Searching for expert recommendations in {language}..."
     )
 
+    # Detect product category using LLM (works for any product, any language)
+    category_key = await detect_category_with_llm(requirement)
+
+    await report_progress(
+        "📋 Category detected",
+        f"'{category_key}' - Loading or discovering criteria..."
+    )
+
+    # Get criteria from store, or discover and save if new category
+    category_criteria = await get_or_discover_criteria(category_key)
+
+    if category_criteria:
+        await report_progress(
+            "✅ Criteria loaded",
+            f"{len(category_criteria)} criteria for {category_key}: {', '.join([c.get('name', '') for c in category_criteria[:5]])}"
+        )
+
     # Collect research from web searches
     research_data = {
         "buying_guides": [],
@@ -212,16 +310,19 @@ async def _research_and_discover_impl(
         "social_mentions": [],
     }
 
-    # Use direct Google scraping for research
-    import re
+    # Translate query to native language for better search results
+    native_query = await translate_query_for_search(requirement, language)
+
     GOOGLE_HEADERS = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": f"{lang_code}-{country},{lang_code};q=0.9,en-US;q=0.8,en;q=0.7",
     }
 
-    # Search queries in user's language
-    search_queries = _generate_research_queries(requirement, language, lang_code)
+    # Generate search queries dynamically
+    search_queries = await _generate_research_queries_dynamic(
+        requirement, native_query, category_key, language, lang_code
+    )
 
     for query_info in search_queries[:4]:  # Limit to 4 queries
         try:
@@ -276,26 +377,58 @@ async def _research_and_discover_impl(
 
         research_summary = json.dumps(research_data, indent=2, ensure_ascii=False)
 
+        # Build category criteria section for prompt
+        category_criteria_text = ""
+        if category_criteria:
+            criteria_list = []
+            for c in category_criteria:
+                if c.get("options"):
+                    criteria_list.append(f"- {c['name']}: {c['description']}. Options: {', '.join(c['options'])}")
+                else:
+                    criteria_list.append(f"- {c['name']}: {c['description']}. Unit: {c.get('unit', 'N/A')}")
+            category_criteria_text = f"""
+IMPORTANT - CATEGORY-SPECIFIC CRITERIA FOR {category_key.upper()}:
+You MUST evaluate and report on ALL of these criteria, not just user-specified ones:
+{chr(10).join(criteria_list)}
+
+For each criterion:
+1. Determine if the user specified a preference
+2. If not specified, research what values are recommended for the user's use case
+3. Be explicit about which criteria come from user vs. domain knowledge
+"""
+
         system_prompt = f"""You are a product research expert helping users in {country} find the right products.
 Your task is to analyze research data and extract:
 1. MARKET-REALISTIC criteria based on what's actually available in {country}
-2. Specific product models that experts recommend
+2. At least 5 DIFFERENT product models that experts recommend (NOT the same model)
 3. Price expectations in local currency ({currency})
+
+{category_criteria_text}
+
+CRITICAL - FINDING DIFFERENT MODELS:
+- Find AT LEAST 5 DIFFERENT product models (different brands or model numbers)
+- Do NOT return the same model from different sources
+- Each recommended model should be UNIQUE
+- If you find "Samsung Model X" mentioned 3 times, list it ONCE and find 4 other models
+- Prioritize finding variety: different brands, different price points, different feature sets
+
+CRITICAL - TRANSPARENT CRITERIA GATHERING:
+- EXPLICITLY list which criteria came from the user's request
+- EXPLICITLY list which criteria you added from domain knowledge
+- For each criterion, explain WHY it matters for this product category
+- If a criterion is important but the user didn't mention it, ADD it and explain why
 
 CRITICAL - MARKET REALITY:
 - Research what products are ACTUALLY AVAILABLE in {country}, not ideal specs
-- For noise levels: Find the TYPICAL range in the local market. If most fridges in {country} are 42-46dB, then 42dB IS "quiet" for that market
+- For noise levels: Find the TYPICAL range in the local market
 - Set "ideal_value" as the user's wish and "market_value" as what's realistically available
-- Include "market_context" explaining the local reality (e.g., "In Israel, refrigerators typically range 42-46dB, with 42dB being the quietest available")
-- For capacity: Research actual recommendations for the use case (e.g., family size)
+- Include "market_context" explaining the local reality
 - Include specific model numbers when mentioned in research
 - Prices must be in {currency} ({country_info['currency_name']})
-- If research is insufficient, acknowledge uncertainty
 
 UNITS - Use {country}'s measurement system:
 - Volume: {country_info['volume_unit']} (NOT {('cubic feet' if country_info['volume_unit'] == 'liters' else 'liters')})
 - Dimensions: {country_info['dimension_unit']} (NOT {('inches' if country_info['dimension_unit'] == 'cm' else 'cm')})
-- Always convert to local units if source uses different system
 
 Respond with valid JSON only."""
 
@@ -308,14 +441,20 @@ RESEARCH DATA:
 Based on this research, provide:
 {{
   "category": "product category",
+  "criteria_transparency": {{
+    "user_specified": ["list of criteria the user explicitly asked for"],
+    "domain_added": ["list of criteria you added from domain knowledge - explain why each matters"],
+    "total_criteria_count": number
+  }},
   "criteria": [
     {{
       "attribute": "attribute name",
+      "source": "user" or "domain_knowledge",
+      "why_important": "explanation of why this criterion matters for this product",
       "ideal_value": "what user ideally wants",
       "market_value": "what's realistically available in {country}",
       "market_context": "explanation of local market reality",
       "is_flexible": true/false,
-      "source": "where this came from",
       "confidence": "high/medium/low"
     }}
   ],
@@ -324,12 +463,13 @@ Based on this research, provide:
       "model": "specific model name/number",
       "brand": "brand name",
       "source": "where recommended (article title, expert, etc.)",
-      "why_recommended": "why this model fits the requirement"
+      "why_recommended": "why this model fits the requirement",
+      "key_differentiator": "what makes this model unique compared to others"
     }}
   ],
   "search_terms": {{
     "native_language": ["search terms in {language} - ALWAYS include native language terms"],
-    "model_searches": ["specific model searches"],
+    "model_searches": ["specific model searches - should have 5+ different models"],
     "category_searches": ["category + feature searches in {language}"]
   }},
   "price_range": {{
@@ -339,8 +479,14 @@ Based on this research, provide:
     "source": "where this estimate comes from"
   }},
   "research_quality": "good/moderate/limited",
-  "market_notes": "important notes about the {country} market for this product category"
-}}"""
+  "market_notes": "important notes about the {country} market for this product category",
+  "model_diversity_check": "confirmation that you found 5+ DIFFERENT models, not duplicates"
+}}
+
+REMEMBER:
+- Find AT LEAST 5 different product models
+- Include ALL domain-specific criteria even if user didn't ask
+- Be transparent about which criteria came from user vs. domain knowledge"""
 
         response = await client.chat.completions.create(
             model="gpt-4o",  # Using GPT-4o for better research analysis
@@ -349,7 +495,7 @@ Based on this research, provide:
                 {"role": "user", "content": user_prompt}
             ],
             temperature=0.3,
-            max_tokens=2000,
+            max_tokens=3000,
         )
 
         result_text = response.choices[0].message.content.strip()
@@ -365,19 +511,27 @@ Based on this research, provide:
         result["country"] = country
         result["language"] = language
         result["original_requirement"] = requirement
+        result["category_template_used"] = category_key
 
         criteria_count = len(result.get("criteria", []))
         models_count = len(result.get("recommended_models", []))
 
+        # Report on criteria transparency
+        transparency = result.get("criteria_transparency", {})
+        user_criteria = len(transparency.get("user_specified", []))
+        domain_criteria = len(transparency.get("domain_added", []))
+
         await report_progress(
             "✅ Research complete",
-            f"Found {criteria_count} criteria, {models_count} recommended models"
+            f"Found {models_count} different models, {criteria_count} criteria ({user_criteria} from user, {domain_criteria} from domain knowledge)"
         )
 
         logger.info("Research complete",
                    requirement=requirement,
                    criteria_count=criteria_count,
                    models_count=models_count,
+                   user_criteria=user_criteria,
+                   domain_criteria=domain_criteria,
                    research_quality=result.get("research_quality"))
 
         return json.dumps(result, indent=2, ensure_ascii=False)
@@ -489,6 +643,72 @@ def _parse_google_search_results(html: str) -> list[dict]:
             continue
 
     return results
+
+
+async def _generate_research_queries_dynamic(
+    requirement: str,
+    native_query: str,
+    category: str,
+    language: str,
+    lang_code: str
+) -> list:
+    """Generate research queries dynamically using LLM.
+
+    This replaces hardcoded query templates with dynamic generation
+    that works for any product category and language.
+    """
+    client = get_openai_client()
+
+    response = await client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": f"""Generate 4-5 search queries for product research.
+Target language: {language}
+Product category: {category}
+
+Generate queries that will find:
+1. Buying guides and comparison articles
+2. Expert recommendations and reviews
+3. Community discussions (forums, Reddit, etc.)
+4. Specific product model recommendations
+
+Each query should be in {language} (except one English query for international research).
+Keep queries natural and similar to what a local user would search.
+
+Return JSON array:
+[{{"query": "search query text", "purpose": "brief description", "category": "buying_guides|product_recommendations|expert_opinions|social_mentions"}}]
+
+Return ONLY valid JSON, no markdown."""},
+            {"role": "user", "content": f"User requirement: {requirement}\nTranslated query: {native_query}"}
+        ],
+        temperature=0.3,
+        max_tokens=800,
+    )
+
+    result_text = response.choices[0].message.content.strip()
+
+    # Clean up response
+    if result_text.startswith("```"):
+        result_text = re.sub(r'^```(?:json)?\n?', '', result_text)
+        result_text = re.sub(r'\n?```$', '', result_text)
+
+    try:
+        queries = json.loads(result_text)
+        return queries
+    except json.JSONDecodeError:
+        # Fallback: return basic queries
+        return [
+            {
+                "query": f"{native_query} recommended 2024",
+                "purpose": "Finding recommended models",
+                "category": "product_recommendations"
+            },
+            {
+                "query": f"{native_query} reviews buying guide",
+                "purpose": "Buying guide",
+                "category": "buying_guides"
+            },
+        ]
 
 
 def _generate_research_queries(requirement: str, language: str, lang_code: str) -> list:
@@ -905,10 +1125,12 @@ async def _analyze_and_format_results_impl(
         "original_requirement": original_requirement,
         "category": category,
         "country": country,
+        "criteria_transparency": research.get("criteria_transparency", {}),
         "criteria_used": criteria,
         "recommended_models_searched": [m.get("model") for m in recommended_models],
         "search_attempts": search_results.get("search_attempts", []),
         "total_products_found": len(products),
+        "unique_models_found": len(seen_models),
         "research_quality": research.get("research_quality", "unknown"),
         "market_notes": market_notes,
     }
@@ -940,6 +1162,9 @@ async def _analyze_and_format_results_impl(
     try:
         client = get_openai_client()
 
+        # Get criteria transparency info
+        criteria_transparency = research.get("criteria_transparency", {})
+
         system_prompt = f"""You are a product analyst using ADAPTIVE FILTERING.
 
 Your job is to:
@@ -947,6 +1172,13 @@ Your job is to:
 2. Score ALL products against VALID criteria
 3. If strict criteria eliminate all products, RELAX criteria based on market reality
 4. Always return the BEST AVAILABLE products, even if they don't perfectly match
+
+CRITICAL - RETURN DIFFERENT MODELS:
+- You MUST return 5 DIFFERENT product models (different brands or model numbers)
+- Do NOT return the same model multiple times even if it's available at different stores
+- Each product in your output must be a UNIQUE model
+- Prioritize variety: different brands, different price points, different feature sets
+- If products list has duplicates, SKIP the duplicates and find unique models
 
 CRITERIA VALIDATION:
 - If a criterion is physically/logically impossible, IGNORE IT and note why in filtering_notes
@@ -968,19 +1200,32 @@ Respond with valid JSON only."""
 
         user_prompt = f"""Analyze these products for: "{original_requirement}"
 
-CRITERIA (may include market context):
+CRITERIA TRANSPARENCY:
+- User specified: {json.dumps(criteria_transparency.get('user_specified', []), ensure_ascii=False)}
+- Domain knowledge added: {json.dumps(criteria_transparency.get('domain_added', []), ensure_ascii=False)}
+
+FULL CRITERIA (may include market context):
 {json.dumps(criteria, indent=2, ensure_ascii=False)}
 
 MARKET NOTES:
 {market_notes}
 
-RECOMMENDED MODELS FROM RESEARCH:
+RECOMMENDED MODELS FROM RESEARCH (use for prioritization only):
 {json.dumps(recommended_models, indent=2, ensure_ascii=False)}
 
-PRODUCTS FOUND ({len(products)} total):
-{json.dumps(products[:20], indent=2, ensure_ascii=False)}
+PRODUCTS FOUND IN LOCAL STORES ({len(products)} total):
+{json.dumps(products[:30], indent=2, ensure_ascii=False)}
+
+CRITICAL - ONLY USE PRODUCTS FROM "PRODUCTS FOUND" LIST:
+- You may ONLY return products that appear in the "PRODUCTS FOUND IN LOCAL STORES" list above
+- Do NOT include any product that wasn't found in local stores, even if it's in recommended models
+- If a recommended model wasn't found in stores, it means it's NOT AVAILABLE in {country} - DO NOT include it
+- The recommended models list is ONLY for prioritization - a product must be in "PRODUCTS FOUND" to be returned
 
 Use ADAPTIVE FILTERING - return best available products even if they don't perfectly match criteria.
+
+IMPORTANT: Return exactly 5 DIFFERENT models (unique brand+model combinations).
+Do NOT return the same model from different stores.
 
 Output:
 {{
@@ -989,7 +1234,7 @@ Output:
       "id": "prod_<timestamp>_<index>",
       "name": "full product name",
       "brand": "brand",
-      "model_number": "model if found",
+      "model_number": "model if found - MUST BE UNIQUE",
       "category": "{category}",
       "key_specs": ["inferred specs based on model/brand knowledge"],
       "price_range": "{country_info['currency']}X,XXX",
@@ -1008,12 +1253,14 @@ Output:
 }}
 
 IMPORTANT:
-- Include 10 best matching products (or all available if fewer than 10)
+- Return EXACTLY 5 DIFFERENT models (or all available if fewer than 5 unique models exist)
+- Each model MUST have a unique model_number - no duplicates
 - NEVER return empty products if there are products available - adapt criteria instead
 - If a product matches a recommended model, prioritize it
 - Be honest about what can't be verified from the product name
 - Price should use {country_info['currency']} symbol
-- Add market_reality_note when criteria were adapted"""
+- Add market_reality_note when criteria were adapted
+- Include model_diversity_note confirming the 5 models are unique"""
 
         response = await client.chat.completions.create(
             model="gpt-4o",
@@ -1032,6 +1279,69 @@ IMPORTANT:
             result_text = re.sub(r'\n?```$', '', result_text)
 
         result = json.loads(result_text)
+
+        # Build set of valid products from search results
+        valid_models = set()
+        valid_names = set()
+        products_with_urls = {}  # model/name -> url mapping
+        for p in products:
+            model = (p.get("model_number") or "").strip().lower()
+            name = (p.get("name") or "").strip().lower()
+            if model:
+                valid_models.add(model)
+                products_with_urls[model] = p.get("url")
+            if name:
+                valid_names.add(name)
+                if name not in products_with_urls:
+                    products_with_urls[name] = p.get("url")
+
+        # Filter out products not found in local stores
+        filtered_products = []
+        for product in result.get("products", []):
+            model = (product.get("model_number") or "").strip().lower()
+            name = (product.get("name") or "").strip().lower()
+
+            # Check if product was found in local stores
+            is_valid = False
+            matched_key = None
+
+            # Check by model number
+            if model:
+                for valid_model in valid_models:
+                    if model in valid_model or valid_model in model:
+                        is_valid = True
+                        matched_key = valid_model
+                        break
+
+            # Check by name if model didn't match
+            if not is_valid and name:
+                for valid_name in valid_names:
+                    # Fuzzy match - check if significant overlap
+                    if len(name) > 10 and (name in valid_name or valid_name in name):
+                        is_valid = True
+                        matched_key = valid_name
+                        break
+
+            if is_valid:
+                # Add URL from original search if not present
+                if not product.get("url") and matched_key:
+                    product["url"] = products_with_urls.get(matched_key)
+                filtered_products.append(product)
+            else:
+                logger.warning(
+                    "Filtered out product not found in local stores",
+                    model=model,
+                    name=name[:50] if name else None
+                )
+
+        if len(filtered_products) < len(result.get("products", [])):
+            logger.info(
+                "Filtered products not available in local stores",
+                original=len(result.get("products", [])),
+                filtered=len(filtered_products)
+            )
+
+        result["products"] = filtered_products
 
         # Ensure products have valid IDs
         timestamp = int(time.time() * 1000)

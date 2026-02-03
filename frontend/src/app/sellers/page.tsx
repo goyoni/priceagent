@@ -74,7 +74,7 @@ export default function SellersPage() {
             </p>
           </div>
           <Link
-            href="/"
+            href="/dashboard"
             className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg text-sm transition-colors"
           >
             Back to Dashboard

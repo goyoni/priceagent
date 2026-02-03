@@ -265,7 +265,7 @@ export function TraceDetail() {
               <p className="text-xs text-slate-400 mb-2">Results so far:</p>
               <div className="max-h-64 overflow-y-auto space-y-2">
                 {completedToolSpans.map((span) => (
-                  <div key={span.id} className="bg-background/50 rounded p-2 text-xs">
+                  <div key={span.id} className="bg-slate-700/50 rounded p-2 text-xs">
                     <p className="text-cyan-400 font-medium mb-1">{span.name}</p>
                     <pre className="text-slate-400 whitespace-pre-wrap font-mono text-[10px] max-h-32 overflow-y-auto">
                       {formatToolOutput(span.tool_output)}

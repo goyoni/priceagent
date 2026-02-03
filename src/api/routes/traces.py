@@ -68,6 +68,8 @@ async def list_traces(
 
     By default, child traces are nested under their parent traces.
     Only root traces (without parent_trace_id) appear at the top level.
+
+    Requires dashboard authentication.
     """
     store = get_trace_store()
     traces = store.get_traces(limit=limit * 2)  # Get more to account for children
@@ -103,7 +105,10 @@ async def list_traces(
 
 @router.get("/running")
 async def list_running_traces(_auth: bool = Depends(verify_dashboard_auth)):
-    """Get currently running traces."""
+    """Get currently running traces.
+
+    Requires dashboard authentication.
+    """
     store = get_trace_store()
     traces = store.get_running_traces()
     return {
@@ -141,8 +146,11 @@ async def get_auth_info():
 
 
 @router.get("/{trace_id}")
-async def get_trace(trace_id: str, _auth: bool = Depends(verify_dashboard_auth)):
-    """Get a trace with all its spans."""
+async def get_trace(trace_id: str):
+    """Get a trace with all its spans.
+
+    Note: This endpoint is public to support the discovery feature.
+    """
     store = get_trace_store()
     trace = store.get_trace(trace_id, include_spans=True)
 
@@ -220,6 +228,29 @@ async def delete_trace(trace_id: str, _auth: bool = Depends(verify_dashboard_aut
         return JSONResponse(status_code=404, content={"error": "Trace not found"})
 
     return {"status": "deleted", "trace_id": trace_id}
+
+
+@router.delete("/")
+async def clear_all_traces(_auth: bool = Depends(verify_dashboard_auth)):
+    """Clear all traces from storage."""
+    store = get_trace_store()
+    count = store.clear_all_traces()
+    return {"status": "cleared", "deleted_count": count}
+
+
+@router.post("/cleanup")
+async def cleanup_stale_traces(
+    stuck_timeout_minutes: int = Query(default=60, ge=1, le=1440),
+    _auth: bool = Depends(verify_dashboard_auth),
+):
+    """Clean up stale traces (stuck in RUNNING state).
+
+    Args:
+        stuck_timeout_minutes: Delete traces running longer than this (default: 60)
+    """
+    store = get_trace_store()
+    result = store.clear_stale_traces(stuck_timeout_minutes=stuck_timeout_minutes)
+    return {"status": "cleaned", **result}
 
 
 @router.websocket("/ws")

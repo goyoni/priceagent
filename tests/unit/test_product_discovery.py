@@ -194,3 +194,4 @@ class TestDiscoveryAgentRoute:
         assert response.status_code == 200
         data = response.json()
         assert "trace_id" in data
+
