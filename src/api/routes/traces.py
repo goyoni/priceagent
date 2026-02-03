@@ -62,13 +62,14 @@ def _trace_to_dict(t, truncate_prompt: bool = True) -> dict:
 async def list_traces(
     limit: int = 50,
     include_children: bool = True,
+    _auth: bool = Depends(verify_dashboard_auth),
 ):
     """List recent traces with summary stats.
 
     By default, child traces are nested under their parent traces.
     Only root traces (without parent_trace_id) appear at the top level.
 
-    Note: This endpoint is public to support the discovery feature on the landing page.
+    Requires dashboard authentication.
     """
     store = get_trace_store()
     traces = store.get_traces(limit=limit * 2)  # Get more to account for children
@@ -103,10 +104,10 @@ async def list_traces(
 
 
 @router.get("/running")
-async def list_running_traces():
+async def list_running_traces(_auth: bool = Depends(verify_dashboard_auth)):
     """Get currently running traces.
 
-    Note: This endpoint is public to support the discovery feature.
+    Requires dashboard authentication.
     """
     store = get_trace_store()
     traces = store.get_running_traces()

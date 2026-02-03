@@ -228,9 +228,7 @@ function SearchPageContent() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [rawResultText, setRawResultText] = useState<string | null>(null);
 
-  // History state
-  const [recentTraces, setRecentTraces] = useState<ServerTrace[]>([]);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  // History state - localStorage only, no server fetch
   const [searchHistory, setSearchHistory] = useState<SearchHistoryItem[]>([]);
 
   // Seller lookup state for enriching results with phone numbers
@@ -437,34 +435,6 @@ function SearchPageContent() {
       }
     }
   }, [sellersLoaded]); // Only run when sellers load status changes
-
-  // Fetch recent traces from server
-  const fetchRecentTraces = async () => {
-    setIsLoadingHistory(true);
-    try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
-      const response = await fetch(`${apiUrl}/traces/?limit=20`);
-      if (response.ok) {
-        const data = await response.json();
-        // Filter to only completed traces, excluding test traces
-        const completed = (data.traces || []).filter(
-          (t: ServerTrace) =>
-            t.status === 'completed' &&
-            !t.input_prompt.toLowerCase().includes('test')
-        );
-        setRecentTraces(completed);
-      }
-    } catch (err) {
-      console.error('[History] Failed to fetch traces:', err);
-    } finally {
-      setIsLoadingHistory(false);
-    }
-  };
-
-  // Fetch recent traces on mount
-  useEffect(() => {
-    fetchRecentTraces();
-  }, []);
 
   // Load trace from URL parameter on mount
   useEffect(() => {
@@ -941,55 +911,16 @@ function SearchPageContent() {
       return;
     }
 
-    // No traceId - try to find a matching trace from server history
-    let matchingTrace = recentTraces.find(t =>
-      t.input_prompt.includes(item.query) ||
-      item.query.includes(t.input_prompt.replace('Search for: ', ''))
-    );
-
-    // If not found locally, fetch from API
-    if (!matchingTrace) {
-      try {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
-        const response = await fetch(`${apiUrl}/traces/?limit=50`);
-        if (response.ok) {
-          const data = await response.json();
-          const allTraces = data.traces || [];
-          matchingTrace = allTraces.find((t: ServerTrace) =>
-            t.status === 'completed' && (
-              t.input_prompt.includes(item.query) ||
-              item.query.includes(t.input_prompt.replace('Search for: ', ''))
-            )
-          );
-        }
-      } catch (err) {
-        console.error('[LocalHistory] Failed to search traces:', err);
-      }
-    }
-
-    if (matchingTrace) {
-      console.log('[LocalHistory] Found matching trace:', matchingTrace.id);
-      const params = new URLSearchParams();
-      params.set('tab', 'search');
-      params.set('trace', matchingTrace.id);
-      router.push(`/?${params.toString()}`, { scroll: false });
-      loadTraceResults(matchingTrace.id);
-    } else {
-      // No matching trace found - just update URL with tab
-      handleTabChange('search');
-      console.log('[LocalHistory] No matching trace found for query:', item.query);
-    }
+    // No traceId (old history item) - re-run the search
+    handleTabChange('search');
+    // User can manually click search to re-run
   };
 
   const handleDeleteHistory = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    // Delete trace from server
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
-    fetch(`${apiUrl}/traces/${id}`, { method: 'DELETE' })
-      .then(() => {
-        setRecentTraces(prev => prev.filter(t => t.id !== id));
-      })
-      .catch(err => console.error('[History] Delete failed:', err));
+    // Delete from localStorage
+    deleteFromHistory(id);
+    setSearchHistory(getSearchHistory());
   };
 
   // Handle click on discovery history item
@@ -1214,11 +1145,7 @@ function SearchPageContent() {
               {activeTab === 'discover' ? 'Discovery History' : activeTab === 'search' ? 'Search History' : 'Recent Searches'}
             </h3>
 
-            {isLoadingHistory ? (
-              <div className="text-center text-gray-400 py-4">
-                <p className="animate-pulse text-sm">Loading...</p>
-              </div>
-            ) : activeTab === 'search' ? (
+            {activeTab === 'search' ? (
               // Price Search History
               searchHistory.length === 0 ? (
                 <div className="text-center text-gray-400 py-4">
