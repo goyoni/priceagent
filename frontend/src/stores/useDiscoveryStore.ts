@@ -311,15 +311,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
 
-      // Fetch traces list to get parent with nested children
-      const listResponse = await fetch(`${apiUrl}/traces/`);
-      if (!listResponse.ok) {
-        throw new Error('Failed to load traces');
-      }
-      const listData = await listResponse.json();
-      const parentTrace = listData.traces?.find((t: { id: string }) => t.id === traceId);
-
-      // Also fetch the trace detail for full output
+      // Fetch the trace detail (public endpoint)
       const response = await fetch(`${apiUrl}/traces/${traceId}`);
       if (!response.ok) {
         throw new Error('Failed to load trace');
@@ -344,22 +336,6 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
         return { products: [] };
       };
 
-      // Helper to extract user query from child trace input_prompt
-      const extractUserQuery = (inputPrompt: string): string => {
-        // Child traces have format "...User's refinement request: <query>\nUser country: ..."
-        const refinementMatch = inputPrompt.match(/User's refinement request:\s*(.+?)(?:\n|$)/);
-        if (refinementMatch) {
-          return refinementMatch[1].trim();
-        }
-        // Fallback: try "New user message:" format
-        const newMsgMatch = inputPrompt.match(/New user message:\s*(.+)/s);
-        if (newMsgMatch) {
-          return newMsgMatch[1].trim();
-        }
-        // Fallback: just return the whole prompt
-        return inputPrompt;
-      };
-
       // Parse parent trace output
       const outputText = data.final_output || data.output || '';
       const discoveryResponse = parseOutput(outputText);
@@ -367,7 +343,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
 
       // Build conversation messages starting with parent
       const messages: ConversationMessage[] = [];
-      let baseTime = Date.now() - 10000;  // Start timestamps in past
+      const baseTime = Date.now() - 10000;  // Start timestamps in past
 
       // Parent user message
       messages.push({
@@ -376,71 +352,26 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
         content: query,
         timestamp: baseTime,
       });
-      baseTime += 1000;
 
       // Parent assistant message
       messages.push({
-        id: `msg_${baseTime}_assistant`,
+        id: `msg_${baseTime + 1000}_assistant`,
         role: 'assistant',
         content: discoveryResponse.products.length > 0
           ? `Found ${discoveryResponse.products.length} product${discoveryResponse.products.length === 1 ? '' : 's'} matching your criteria.`
           : discoveryResponse.no_results_message || 'No products found.',
-        timestamp: baseTime,
+        timestamp: baseTime + 1000,
         traceId,
         productsSnapshot: discoveryResponse.products,
       });
-      baseTime += 1000;
 
       // Track the latest products (from last refinement or parent)
-      let latestProducts = discoveryResponse.products;
-      let latestResponse = discoveryResponse;
-      let latestTraceId = traceId;
+      const latestProducts = discoveryResponse.products;
+      const latestResponse = discoveryResponse;
+      const latestTraceId = traceId;
 
-      // Add child traces (refinements) if any
-      const childTraces = parentTrace?.child_traces || [];
-      if (childTraces.length > 0) {
-        console.log('[Discovery] Loading', childTraces.length, 'child traces (refinements)');
-
-        for (const child of childTraces) {
-          // Fetch child trace detail for full output
-          const childResponse = await fetch(`${apiUrl}/traces/${child.id}`);
-          if (childResponse.ok) {
-            const childData = await childResponse.json();
-            const childOutput = parseOutput(childData.final_output || childData.output || '');
-
-            // User refinement message
-            const userQuery = extractUserQuery(child.input_prompt || '');
-            messages.push({
-              id: `msg_${baseTime}_user`,
-              role: 'user',
-              content: userQuery,
-              timestamp: baseTime,
-              productsSnapshot: latestProducts,  // Snapshot before this refinement
-            });
-            baseTime += 1000;
-
-            // Assistant response
-            messages.push({
-              id: `msg_${baseTime}_assistant`,
-              role: 'assistant',
-              content: childOutput.products.length > 0
-                ? `Found ${childOutput.products.length} product${childOutput.products.length === 1 ? '' : 's'} matching your criteria.`
-                : childOutput.no_results_message || 'No products found.',
-              timestamp: baseTime,
-              traceId: child.id,
-              productsSnapshot: childOutput.products,
-            });
-            baseTime += 1000;
-
-            // Update latest
-            if (childOutput.products.length > 0) {
-              latestProducts = childOutput.products;
-              latestResponse = childOutput;
-              latestTraceId = child.id;
-            }
-          }
-        }
-      }
+      // Note: Child traces (refinements) are not loaded from history since it would require
+      // authenticated access to the traces list. Users can continue refining from this point.
 
       set({
         products: latestProducts,
