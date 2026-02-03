@@ -1204,11 +1204,17 @@ FULL CRITERIA (may include market context):
 MARKET NOTES:
 {market_notes}
 
-RECOMMENDED MODELS FROM RESEARCH:
+RECOMMENDED MODELS FROM RESEARCH (use for prioritization only):
 {json.dumps(recommended_models, indent=2, ensure_ascii=False)}
 
-PRODUCTS FOUND ({len(products)} total):
+PRODUCTS FOUND IN LOCAL STORES ({len(products)} total):
 {json.dumps(products[:30], indent=2, ensure_ascii=False)}
+
+CRITICAL - ONLY USE PRODUCTS FROM "PRODUCTS FOUND" LIST:
+- You may ONLY return products that appear in the "PRODUCTS FOUND IN LOCAL STORES" list above
+- Do NOT include any product that wasn't found in local stores, even if it's in recommended models
+- If a recommended model wasn't found in stores, it means it's NOT AVAILABLE in {country} - DO NOT include it
+- The recommended models list is ONLY for prioritization - a product must be in "PRODUCTS FOUND" to be returned
 
 Use ADAPTIVE FILTERING - return best available products even if they don't perfectly match criteria.
 
@@ -1267,6 +1273,69 @@ IMPORTANT:
             result_text = re.sub(r'\n?```$', '', result_text)
 
         result = json.loads(result_text)
+
+        # Build set of valid products from search results
+        valid_models = set()
+        valid_names = set()
+        products_with_urls = {}  # model/name -> url mapping
+        for p in products:
+            model = (p.get("model_number") or "").strip().lower()
+            name = (p.get("name") or "").strip().lower()
+            if model:
+                valid_models.add(model)
+                products_with_urls[model] = p.get("url")
+            if name:
+                valid_names.add(name)
+                if name not in products_with_urls:
+                    products_with_urls[name] = p.get("url")
+
+        # Filter out products not found in local stores
+        filtered_products = []
+        for product in result.get("products", []):
+            model = (product.get("model_number") or "").strip().lower()
+            name = (product.get("name") or "").strip().lower()
+
+            # Check if product was found in local stores
+            is_valid = False
+            matched_key = None
+
+            # Check by model number
+            if model:
+                for valid_model in valid_models:
+                    if model in valid_model or valid_model in model:
+                        is_valid = True
+                        matched_key = valid_model
+                        break
+
+            # Check by name if model didn't match
+            if not is_valid and name:
+                for valid_name in valid_names:
+                    # Fuzzy match - check if significant overlap
+                    if len(name) > 10 and (name in valid_name or valid_name in name):
+                        is_valid = True
+                        matched_key = valid_name
+                        break
+
+            if is_valid:
+                # Add URL from original search if not present
+                if not product.get("url") and matched_key:
+                    product["url"] = products_with_urls.get(matched_key)
+                filtered_products.append(product)
+            else:
+                logger.warning(
+                    "Filtered out product not found in local stores",
+                    model=model,
+                    name=name[:50] if name else None
+                )
+
+        if len(filtered_products) < len(result.get("products", [])):
+            logger.info(
+                "Filtered products not available in local stores",
+                original=len(result.get("products", [])),
+                filtered=len(filtered_products)
+            )
+
+        result["products"] = filtered_products
 
         # Ensure products have valid IDs
         timestamp = int(time.time() * 1000)

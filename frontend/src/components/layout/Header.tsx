@@ -19,6 +19,12 @@ export function Header() {
           >
             Sellers DB
           </Link>
+          <Link
+            href="/criteria"
+            className="text-sm text-slate-400 hover:text-white transition-colors"
+          >
+            Criteria
+          </Link>
         </nav>
       </div>
       <StatusIndicator />
