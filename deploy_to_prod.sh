@@ -81,6 +81,26 @@ fi
 echo ""
 echo -e "${YELLOW}Deploying version: ${VERSION}${NC}"
 
+# Build frontend before merge (ensures frontend/out is up to date)
+echo ""
+echo -e "${YELLOW}Building frontend...${NC}"
+cd "$PROJECT_DIR/frontend"
+if npm run build; then
+    echo -e "${GREEN}✓${NC} Frontend built"
+else
+    echo -e "${RED}✗${NC} Frontend build failed"
+    echo -e "${RED}Deployment aborted. Fix build errors before deploying.${NC}"
+    exit 1
+fi
+cd "$PROJECT_DIR"
+
+# Commit frontend build if there are changes
+if ! git diff --quiet frontend/out/; then
+    echo -e "${YELLOW}Committing frontend build...${NC}"
+    git add frontend/out/
+    git commit -m "chore: Rebuild frontend for ${VERSION}"
+fi
+
 # Switch to main and merge
 echo ""
 echo -e "${YELLOW}Switching to main branch...${NC}"
@@ -109,6 +129,7 @@ echo -e "${GREEN}  Version: ${VERSION}                  ${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
 echo "Summary:"
+echo "  - Built frontend for production"
 echo "  - Merged development -> main"
 echo "  - Created tag: ${VERSION}"
 echo ""
