@@ -9,8 +9,10 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useDiscoveryStore } from '@/stores/useDiscoveryStore';
 import { DiscoveryResultsTable } from './DiscoveryResultsTable';
+import { MatchedSetsView } from './MatchedSetsView';
+import { GroupedProductsView } from './GroupedProductsView';
 import { CountrySelector } from '@/components/ui/CountrySelector';
-import type { DiscoveredProduct, ShoppingListItem, DiscoveryResponse, ConversationMessage } from '@/lib/types';
+import type { DiscoveredProduct, ShoppingListItem, DiscoveryResponse, ConversationMessage, ProductMatch } from '@/lib/types';
 
 interface ProductDiscoveryViewProps {
   onAddToShoppingList: (item: Omit<ShoppingListItem, 'id' | 'added_at'>) => void;
@@ -47,6 +49,34 @@ function parseDiscoveryResponse(output: string): DiscoveryResponse {
       });
     };
 
+    // Extract matched sets with proper typing
+    const extractMatchedSets = (items: unknown[]): ProductMatch[] => {
+      return items.map((s: unknown): ProductMatch => {
+        const set = s as Record<string, unknown>;
+        return {
+          set_id: String(set.set_id || `set_${Date.now()}`),
+          products: Array.isArray(set.products) ? extractProducts(set.products) : [],
+          product_types: Array.isArray(set.product_types) ? set.product_types.map(String) : [],
+          match_score: typeof set.match_score === 'number' ? set.match_score : 0,
+          match_reasons: Array.isArray(set.match_reasons) ? set.match_reasons.map(String) : [],
+          combined_price: typeof set.combined_price === 'number' ? set.combined_price : undefined,
+          currency: set.currency ? String(set.currency) : undefined,
+        };
+      });
+    };
+
+    // Extract products_by_type with proper typing
+    const extractProductsByType = (data: unknown): Record<string, DiscoveredProduct[]> | undefined => {
+      if (!data || typeof data !== 'object') return undefined;
+      const result: Record<string, DiscoveredProduct[]> = {};
+      for (const [key, value] of Object.entries(data as Record<string, unknown>)) {
+        if (Array.isArray(value)) {
+          result[key] = extractProducts(value);
+        }
+      }
+      return Object.keys(result).length > 0 ? result : undefined;
+    };
+
     if (parsed.products && Array.isArray(parsed.products)) {
       return {
         products: extractProducts(parsed.products),
@@ -54,6 +84,10 @@ function parseDiscoveryResponse(output: string): DiscoveryResponse {
         no_results_message: parsed.no_results_message,
         suggestions: parsed.suggestions,
         criteria_feedback: parsed.criteria_feedback,
+        // Multi-product fields
+        is_multi_product: parsed.is_multi_product === true,
+        products_by_type: extractProductsByType(parsed.products_by_type),
+        matched_sets: Array.isArray(parsed.matched_sets) ? extractMatchedSets(parsed.matched_sets) : undefined,
       };
     }
 
@@ -106,6 +140,10 @@ export function ProductDiscoveryView({
     statusMessage,
     messages,
     sessionId,
+    // Multi-product state
+    isMultiProduct,
+    productsByType,
+    matchedSets,
     setStatusMessage,
     setError,
     runDiscovery,
@@ -114,6 +152,10 @@ export function ProductDiscoveryView({
     clearResults,
     loadFromMessage,
   } = useDiscoveryStore();
+
+  // View mode for multi-product results
+  type ViewMode = 'flat' | 'grouped' | 'matched';
+  const [viewMode, setViewMode] = useState<ViewMode>('matched');
 
   // Sync country from props to store
   useEffect(() => {
@@ -515,7 +557,14 @@ export function ProductDiscoveryView({
         <div className="bg-white/30 border border-gray-200 rounded-xl p-4">
           <div className="flex items-center justify-between mb-4">
             <span className="text-gray-500 text-sm">
-              Found {products.length} recommended products
+              {isMultiProduct && productsByType
+                ? `Found ${Object.entries(productsByType).map(([type, prods]) => `${prods.length} ${type.replace(/_/g, ' ')}s`).join(', ')}`
+                : `Found ${products.length} recommended products`}
+              {isMultiProduct && matchedSets && matchedSets.length > 0 && (
+                <span className="ml-2 text-emerald-600">
+                  ({matchedSets.length} matching sets)
+                </span>
+              )}
             </span>
             <button
               onClick={clearResults}
@@ -524,6 +573,42 @@ export function ProductDiscoveryView({
               Clear results
             </button>
           </div>
+
+          {/* View mode toggle for multi-product searches */}
+          {isMultiProduct && (
+            <div className="flex gap-1 p-1 bg-gray-100 rounded-lg mb-4 w-fit">
+              <button
+                onClick={() => setViewMode('matched')}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                  viewMode === 'matched'
+                    ? 'bg-white text-indigo-600 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Matched Sets
+              </button>
+              <button
+                onClick={() => setViewMode('grouped')}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                  viewMode === 'grouped'
+                    ? 'bg-white text-indigo-600 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                By Type
+              </button>
+              <button
+                onClick={() => setViewMode('flat')}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                  viewMode === 'flat'
+                    ? 'bg-white text-indigo-600 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                All Products
+              </button>
+            </div>
+          )}
 
           {/* Market notes / Filtering notes - show when criteria were adapted */}
           {searchSummary?.filtering_notes && (
@@ -542,11 +627,26 @@ export function ProductDiscoveryView({
             </div>
           )}
 
-          <DiscoveryResultsTable
-            products={products}
-            onAddToList={handleAddToList}
-            isAddingId={addingProductId}
-          />
+          {/* Render appropriate view based on mode */}
+          {isMultiProduct && viewMode === 'matched' && matchedSets && matchedSets.length > 0 ? (
+            <MatchedSetsView
+              matchedSets={matchedSets}
+              onAddToList={handleAddToList}
+              isAddingId={addingProductId}
+            />
+          ) : isMultiProduct && viewMode === 'grouped' && productsByType ? (
+            <GroupedProductsView
+              productsByType={productsByType}
+              onAddToList={handleAddToList}
+              isAddingId={addingProductId}
+            />
+          ) : (
+            <DiscoveryResultsTable
+              products={products}
+              onAddToList={handleAddToList}
+              isAddingId={addingProductId}
+            />
+          )}
 
           {/* Conversation refinement section */}
           {sessionId && (

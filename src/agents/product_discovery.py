@@ -24,6 +24,12 @@ from openai import AsyncOpenAI
 from src.tools.scraping import ScraperRegistry
 from src.cache import cached
 from src.observability import report_progress, record_search, record_error, record_warning
+from src.agents.product_matching import (
+    parse_multi_product_query,
+    find_matched_sets,
+    extract_product_attributes,
+    normalize_product_type,
+)
 
 
 # Country to language mapping
@@ -1085,6 +1091,128 @@ analyze_and_format_results = function_tool(
 
 
 # ============================================================================
+# Tool 4: Match Product Sets (for Multi-Product Queries)
+# ============================================================================
+
+async def _match_product_sets_impl(
+    products_by_type_json: str,
+    relationship: str = "matching",
+) -> str:
+    """Score cross-product matches and highlight best pairs for multi-product queries.
+
+    This tool takes products grouped by type (e.g., coffee_table, side_table) and:
+    1. Extracts visual attributes (color, style, material, brand) from each product
+    2. Scores all possible pairs across different product types
+    3. Returns matched sets with explanations of why they match
+
+    Args:
+        products_by_type_json: JSON dict mapping product type to list of products
+            Example: {"coffee_table": [...], "side_table": [...]}
+        relationship: "matching" (same color/style) or "complementary" (goes well together)
+
+    Returns:
+        JSON with matched_sets and products_by_type with match indicators
+    """
+    import structlog
+    logger = structlog.get_logger()
+
+    await report_progress(
+        "🔗 Matching",
+        "Finding matching product sets..."
+    )
+
+    try:
+        products_by_type = json.loads(products_by_type_json)
+    except json.JSONDecodeError as e:
+        logger.error("Failed to parse products_by_type JSON", error=str(e))
+        return json.dumps({
+            "error": f"Invalid products JSON: {str(e)}",
+            "matched_sets": [],
+            "products_by_type": {},
+        })
+
+    if not products_by_type or len(products_by_type) < 2:
+        return json.dumps({
+            "matched_sets": [],
+            "products_by_type": products_by_type,
+            "note": "Need at least 2 product types to find matches",
+        })
+
+    # Count total products
+    total_products = sum(len(products) for products in products_by_type.values())
+    product_types = list(products_by_type.keys())
+
+    await report_progress(
+        "🔗 Matching",
+        f"Analyzing {total_products} products across {len(product_types)} types..."
+    )
+
+    # Use the matching module to find matched sets
+    min_score = 0.2 if relationship == "complementary" else 0.3
+    matched_sets = find_matched_sets(
+        products_by_type,
+        min_score=min_score,
+        max_sets=10,
+    )
+
+    # Build a set of product IDs that have matches
+    products_with_matches = set()
+    for match_set in matched_sets:
+        for product in match_set.get("products", []):
+            prod_id = product.get("id")
+            if prod_id:
+                products_with_matches.add(prod_id)
+
+    # Add match indicators to products
+    for product_type, products in products_by_type.items():
+        for product in products:
+            prod_id = product.get("id")
+            product["has_matches"] = prod_id in products_with_matches if prod_id else False
+            # Add extracted attributes for frontend display
+            attrs = extract_product_attributes(product)
+            product["matching_attributes"] = {
+                k: v for k, v in attrs.items() if v is not None
+            }
+
+    matches_found = len(matched_sets)
+    products_matched = len(products_with_matches)
+
+    await report_progress(
+        "✅ Matching complete",
+        f"Found {matches_found} matched sets ({products_matched} products)"
+    )
+
+    logger.info(
+        "Product matching complete",
+        product_types=product_types,
+        total_products=total_products,
+        matched_sets=matches_found,
+        products_with_matches=products_matched,
+        relationship=relationship,
+    )
+
+    return json.dumps({
+        "matched_sets": matched_sets,
+        "products_by_type": products_by_type,
+        "summary": {
+            "product_types": product_types,
+            "total_products": total_products,
+            "matched_sets_count": matches_found,
+            "products_with_matches": products_matched,
+            "relationship": relationship,
+        },
+    }, indent=2, ensure_ascii=False)
+
+
+_match_product_sets_cached = cached(
+    cache_type="agent", key_prefix="match_sets"
+)(_match_product_sets_impl)
+match_product_sets = function_tool(
+    _match_product_sets_cached, name_override="match_product_sets"
+)
+
+
+# ============================================================================
 # Helper Functions
 # ============================================================================
 
@@ -1220,13 +1348,89 @@ Your final response must be the JSON from step 3. It includes:
 ## IMPORTANT RULES
 
 1. ALWAYS extract the country from the prompt first
-2. ALWAYS complete all 3 steps
+2. ALWAYS complete all steps (3 for single-product, 4 for multi-product)
 3. ALWAYS return valid JSON (no markdown, no explanations outside JSON)
 4. NEVER guess criteria - base them on research
 5. Use correct currency and units for user's country (IL uses ₪, liters, cm)
 6. If no products found, still return the search_summary so user knows what was tried
 7. Prioritize finding specific recommended models over generic searches
 8. For refinements, incorporate the user's feedback into the search criteria
+
+## MULTI-PRODUCT QUERIES
+
+If the user asks for multiple related products (e.g., "coffee table and side table", "sofa with matching armchair"):
+
+### Detection Patterns
+Look for these patterns in the user's query:
+- "X and Y" → two products (e.g., "coffee table and side table")
+- "X and matching Y" → two products that should match in style/color
+- "X with Y" → two complementary products
+- "X that matches Y" → products should coordinate
+- "matching X and Y" → explicit matching request
+- Keywords: "matching", "coordinate", "complement", "go with", "same style", "same color"
+
+### Multi-Product Workflow (4 steps)
+
+**Step 1: DETECT AND PARSE**
+Identify if this is a multi-product query. Extract:
+- Individual products: ["coffee table", "side table"]
+- Relationship: "matching" or "complementary"
+
+**Step 2: SEARCH EACH PRODUCT TYPE**
+For EACH product type, run the standard workflow:
+1. `research_and_discover` for product type 1
+2. `search_products_smart` for product type 1 (aim for 10 results)
+3. Repeat for product type 2, 3, etc.
+
+Store results by product type:
+```json
+{
+  "coffee_table": [products...],
+  "side_table": [products...]
+}
+```
+
+**Step 3: MATCH PRODUCT SETS**
+Use `match_product_sets` with the products_by_type JSON.
+This tool:
+- Extracts visual attributes (color, style, material, brand) from each product
+- Scores all pairs across different product types
+- Returns matched sets with match reasons
+
+**Step 4: FORMAT OUTPUT**
+Combine results into multi-product output format:
+```json
+{
+  "is_multi_product": true,
+  "products": [...],  // Flat list for backwards compatibility
+  "products_by_type": {
+    "coffee_table": [...],
+    "side_table": [...]
+  },
+  "matched_sets": [
+    {
+      "set_id": "set_1",
+      "products": [...],
+      "match_score": 0.85,
+      "match_reasons": ["Same walnut finish", "Both mid-century style"],
+      "combined_price": 850
+    }
+  ],
+  "search_summary": {
+    "product_types_searched": ["coffee_table", "side_table"],
+    "relationship": "matching",
+    ...
+  }
+}
+```
+
+### Multi-Product Rules
+- Search for 10 products per type (not 3 total)
+- Always include both products_by_type AND matched_sets
+- Sort matched_sets by match_score (highest first)
+- Products in matched_sets should have match_reasons explaining why they match
+- For "matching" queries, prioritize color and style matches
+- For "complementary" queries, also consider material and brand matches
 """,
-    tools=[research_and_discover, search_products_smart, analyze_and_format_results],
+    tools=[research_and_discover, search_products_smart, analyze_and_format_results, match_product_sets],
 )

@@ -214,6 +214,35 @@ export interface DiscoveryResponse {
   criteria_feedback?: string[];
   market_notes?: string;
   filtering_notes?: string;
+  // Multi-product fields
+  is_multi_product?: boolean;
+  products_by_type?: Record<string, DiscoveredProduct[]>;
+  matched_sets?: ProductMatch[];
+}
+
+// Multi-product matching types
+export interface MatchingAttributes {
+  color?: string;
+  style?: string;
+  material?: string;
+  brand?: string;
+}
+
+export interface ProductMatch {
+  set_id: string;
+  products: DiscoveredProduct[];
+  product_types: string[];
+  match_score: number;
+  match_reasons: string[];
+  combined_price?: number;
+  currency?: string;
+}
+
+// Extended DiscoveredProduct with matching attributes
+export interface DiscoveredProductWithMatching extends DiscoveredProduct {
+  has_matches?: boolean;
+  matching_attributes?: MatchingAttributes;
+  best_matches?: string[];  // IDs of matching products
 }
 
 // Conversation types for product discovery

@@ -4,7 +4,7 @@
 
 import { create } from 'zustand';
 import { api } from '@/lib/api';
-import type { DiscoveredProduct, DiscoverySearchSummary, DiscoveryResponse, ConversationMessage } from '@/lib/types';
+import type { DiscoveredProduct, DiscoverySearchSummary, DiscoveryResponse, ConversationMessage, ProductMatch } from '@/lib/types';
 import {
   DiscoveryHistoryItem,
   getDiscoveryHistory,
@@ -29,6 +29,11 @@ interface DiscoveryState {
   error: string | null;
   statusMessage: string | null;
   history: DiscoveryHistoryItem[];
+
+  // Multi-product state
+  isMultiProduct: boolean;
+  productsByType: Record<string, DiscoveredProduct[]> | null;
+  matchedSets: ProductMatch[] | null;
 
   // Conversation state
   messages: ConversationMessage[];
@@ -68,6 +73,11 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
   statusMessage: null,
   history: [],
 
+  // Multi-product state
+  isMultiProduct: false,
+  productsByType: null,
+  matchedSets: null,
+
   // Conversation state
   messages: [],
   sessionId: null,
@@ -91,6 +101,10 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
     originalTraceId: null,
     messages: [],
     sessionId: null,
+    // Clear multi-product state
+    isMultiProduct: false,
+    productsByType: null,
+    matchedSets: null,
   }),
 
   // Clear just the conversation (keep products)
@@ -232,12 +246,21 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
       originalTraceId,
       isRefinement,
       productCount: products.length,
+      isMultiProduct: response.is_multi_product,
+      matchedSetsCount: response.matched_sets?.length,
     });
 
     // Create assistant message for the conversation
-    const assistantContent = products.length > 0
-      ? `Found ${products.length} product${products.length === 1 ? '' : 's'} matching your criteria.`
-      : response.no_results_message || 'No products found matching your criteria.';
+    let assistantContent: string;
+    if (response.is_multi_product && response.products_by_type) {
+      const types = Object.keys(response.products_by_type);
+      const counts = types.map(t => `${response.products_by_type![t].length} ${t.replace(/_/g, ' ')}s`).join(', ');
+      assistantContent = `Found ${counts}${response.matched_sets?.length ? ` with ${response.matched_sets.length} matching sets` : ''}.`;
+    } else if (products.length > 0) {
+      assistantContent = `Found ${products.length} product${products.length === 1 ? '' : 's'} matching your criteria.`;
+    } else {
+      assistantContent = response.no_results_message || 'No products found matching your criteria.';
+    }
 
     const assistantMessage: ConversationMessage = {
       id: `msg_${Date.now()}`,
@@ -265,6 +288,10 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
         criteriaFeedback: response.criteria_feedback || [],
         isSearching: false,
         statusMessage: null,
+        // Multi-product fields
+        isMultiProduct: response.is_multi_product || false,
+        productsByType: response.products_by_type || null,
+        matchedSets: response.matched_sets || null,
         history: state.history.map(h =>
           h.traceId === currentTraceId
             ? { ...h, status: 'completed' as const, productCount: products.length }
@@ -281,6 +308,10 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
         criteriaFeedback: response.criteria_feedback || [],
         isSearching: false,
         statusMessage: null,
+        // Multi-product fields
+        isMultiProduct: response.is_multi_product || false,
+        productsByType: response.products_by_type || null,
+        matchedSets: response.matched_sets || null,
         messages: [...state.messages, assistantMessage],
       }));
     }
