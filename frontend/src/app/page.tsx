@@ -254,8 +254,11 @@ function SearchPageContent() {
     }
 
     const traceId = activeSearchSession.trace_id;
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-    const wsUrl = apiUrl.replace('http://', 'ws://').replace('https://', 'wss://');
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+    // For WebSocket, use window.location if apiUrl is relative/empty
+    const wsUrl = apiUrl
+      ? apiUrl.replace('http://', 'ws://').replace('https://', 'wss://')
+      : `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`;
 
     let ws: WebSocket | null = null;
     let cleanup = () => {

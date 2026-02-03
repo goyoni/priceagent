@@ -161,7 +161,10 @@ export function ProductDiscoveryView({
     }
 
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
-    const wsUrl = apiUrl.replace('http', 'ws') || 'ws://localhost:8000';
+    // For WebSocket, use window.location if apiUrl is relative/empty
+    const wsUrl = apiUrl
+      ? apiUrl.replace('http', 'ws')
+      : `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`;
     const traceIdForThisEffect = currentTraceId;  // Capture for this effect instance
 
     console.log('[Discovery] Connecting WebSocket for trace:', traceIdForThisEffect);
