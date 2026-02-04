@@ -209,6 +209,7 @@ function SearchPageContent() {
   const {
     history: discoveryHistory,
     currentTraceId: discoveryCurrentTraceId,
+    isSearching: isDiscoverySearching,
     loadHistory: loadDiscoveryHistory,
     loadFromTrace: loadDiscoveryFromTrace,
     deleteFromHistory: deleteDiscoveryHistoryItem,
@@ -444,10 +445,11 @@ function SearchPageContent() {
     if (traceId) {
       if (tab === 'discover') {
         // Discovery trace - load using discovery store
+        // Don't reload if a new search is in progress (currentTraceId would be null but isSearching true)
         // Find the query from history, or use empty string as fallback
         const historyItem = discoveryHistory.find(h => h.traceId === traceId);
         const query = historyItem?.query || '';
-        if (discoveryCurrentTraceId !== traceId) {
+        if (discoveryCurrentTraceId !== traceId && !isDiscoverySearching) {
           loadDiscoveryFromTrace(traceId, query);
         }
       } else if (traceId !== priceSearchTraceId) {
@@ -463,7 +465,7 @@ function SearchPageContent() {
       setRawResultText(null);
       setQuery('');
     }
-  }, [searchParams, discoveryHistory, discoveryCurrentTraceId]);
+  }, [searchParams, discoveryHistory, discoveryCurrentTraceId, isDiscoverySearching]);
 
   // Function to load results from an existing trace
   const loadTraceResults = async (traceId: string) => {
