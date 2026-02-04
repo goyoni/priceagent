@@ -1348,7 +1348,7 @@ Output:
       "brand": "brand",
       "model_number": "model if found - MUST BE UNIQUE",
       "category": "{category}",
-      "key_specs": ["inferred specs based on model/brand knowledge"],
+      "key_specs": ["Capacity: 8kg", "Noise: 52dB", "Energy: A+++"],
       "price_range": "{country_info['currency']}X,XXX",
       "criteria_match": {{
         "matched": ["which criteria this product meets"],
@@ -1363,6 +1363,14 @@ Output:
   ],
   "filtering_notes": "explain any adaptive filtering applied (e.g., 'Relaxed noise criteria from <40dB to <43dB as no products under 40dB available in Israel')"
 }}
+
+KEY_SPECS REQUIREMENTS:
+- key_specs MUST contain actual values for each product, NOT empty arrays
+- Use format "Attribute: Value" for each spec (e.g., "Capacity: 8kg", "Noise: 52dB")
+- Include specs for the main criteria from the FULL CRITERIA list above
+- Use your knowledge of the product model to infer specs (e.g., Bosch WAN24170BY has 8kg capacity)
+- If you don't know a spec value, omit it (don't say "unknown")
+- Common appliance specs to include: Capacity, Noise Level, Energy Class, Dimensions, RPM, Programs
 
 IMPORTANT:
 - FIRST: Filter out ANY product that is NOT a {category} - check Hebrew names carefully!
