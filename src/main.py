@@ -77,8 +77,21 @@ async def health_check():
 async def startup_event():
     """Initialize database on application startup."""
     from src.config.settings import settings
-    await init_db(settings.database_path)
-    logger.info("Database initialized on startup", path=str(settings.database_path))
+    try:
+        await init_db()
+        logger.info(
+            "Database initialized on startup",
+            is_postgres=settings.is_postgres,
+            database_url=settings.database_url[:30] + "..." if settings.database_url else None,
+        )
+    except Exception as e:
+        logger.error(
+            "Failed to initialize database",
+            error=str(e),
+            is_postgres=settings.is_postgres,
+        )
+        # Don't raise - allow health check to work, app can still serve static content
+        # Database-dependent endpoints will fail gracefully
 
 
 # Initialize global trace store
