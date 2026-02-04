@@ -1335,6 +1335,51 @@ IMPORTANT:
                 filtered=len(filtered_products)
             )
 
+        # FALLBACK: If filtering removed ALL products but we have original search results,
+        # use the original products with enhanced info from URLs
+        if len(filtered_products) == 0 and len(products) > 0:
+            logger.warning(
+                "All LLM products filtered out - using original search results as fallback",
+                llm_products=len(result.get("products", [])),
+                original_products=len(products)
+            )
+            timestamp = int(time.time() * 1000)
+            fallback_products = []
+
+            for i, p in enumerate(products[:10]):
+                # Try to extract brand and model from URL or name
+                url = p.get("url", "")
+                name = p.get("name", "Unknown")
+                extracted_brand = extract_brand(url) or extract_brand(name)
+
+                # Try to extract model from URL path
+                model = None
+                if url:
+                    # Common patterns: /product/BRAND-MODEL, /MODEL.html
+                    import re
+                    model_match = re.search(r'[/-]([A-Z]{2,}[\w-]{3,20})\b', url, re.IGNORECASE)
+                    if model_match:
+                        model = model_match.group(1).upper()
+
+                fallback_products.append({
+                    "id": f"prod_{timestamp}_{i}",
+                    "name": f"{extracted_brand or 'Product'} {model or ''} - {name}".strip(),
+                    "brand": extracted_brand,
+                    "model_number": model,
+                    "category": category,
+                    "key_specs": [],
+                    "price": p.get("price"),
+                    "currency": p.get("currency", country_info['currency']),
+                    "price_range": f"{country_info['currency']}{p.get('price', 0):,.0f}" if p.get('price') else None,
+                    "url": p.get("url"),
+                    "rating": p.get("rating"),
+                    "why_recommended": "Found in local stores matching your search",
+                    "match_score": "unknown",
+                })
+
+            filtered_products = fallback_products
+            search_summary["filtering_notes"] = "Products shown are raw search results - detailed analysis was not possible"
+
         result["products"] = filtered_products
 
         # Ensure products have valid IDs
