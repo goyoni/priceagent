@@ -69,13 +69,20 @@ echo -e "${GREEN}✓${NC} All tests passed"
 if [ -n "$1" ]; then
     VERSION="$1"
 else
-    # Get latest tag and increment
+    # Get latest tag and increment, skipping existing tags
     LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
     # Extract version numbers
     VERSION_NUM=${LATEST_TAG#v}
     IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION_NUM"
     PATCH=$((PATCH + 1))
     VERSION="v${MAJOR}.${MINOR}.${PATCH}"
+
+    # Keep incrementing if tag already exists (handles partial deploys)
+    while git rev-parse "$VERSION" >/dev/null 2>&1; do
+        echo -e "${YELLOW}Tag ${VERSION} already exists, trying next...${NC}"
+        PATCH=$((PATCH + 1))
+        VERSION="v${MAJOR}.${MINOR}.${PATCH}"
+    done
 fi
 
 echo ""
