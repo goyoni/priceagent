@@ -52,17 +52,42 @@ export function TraceDetail() {
   ) || [];
   const totalSpans = selectedTrace.spans?.length || 0;
 
-  // Format tool output for display
+  // Format tool output for display - increased limit for better debugging
   const formatToolOutput = (output: unknown): string => {
     if (!output) return '';
     if (typeof output === 'string') {
-      return output.slice(0, 1000) + (output.length > 1000 ? '...' : '');
+      // Try to parse as JSON for better formatting
+      try {
+        const parsed = JSON.parse(output);
+        return JSON.stringify(parsed, null, 2);
+      } catch {
+        // Not JSON, return as-is with higher limit
+        return output.slice(0, 5000) + (output.length > 5000 ? '\n... (truncated)' : '');
+      }
     }
     try {
       const str = JSON.stringify(output, null, 2);
-      return str.slice(0, 1000) + (str.length > 1000 ? '...' : '');
+      return str.slice(0, 5000) + (str.length > 5000 ? '\n... (truncated)' : '');
     } catch {
-      return String(output).slice(0, 1000);
+      return String(output).slice(0, 5000);
+    }
+  };
+
+  // Format final output with JSON detection
+  const formatFinalOutput = (output: string): React.ReactNode => {
+    if (!output) return null;
+
+    // Try to parse as JSON for better formatting
+    try {
+      const parsed = JSON.parse(output);
+      return (
+        <pre className="text-slate-300 text-sm overflow-x-auto">
+          {JSON.stringify(parsed, null, 2)}
+        </pre>
+      );
+    } catch {
+      // Not JSON, return as plain text
+      return <span className="text-slate-300">{output}</span>;
     }
   };
 
@@ -304,8 +329,8 @@ export function TraceDetail() {
           <summary className="text-sm font-medium text-slate-400 mb-2 cursor-pointer hover:text-cyan-400">
             Raw Output
           </summary>
-          <div className="bg-slate-700 rounded-lg p-4 text-sm whitespace-pre-wrap mt-2 text-slate-300">
-            {selectedTrace.final_output}
+          <div className="bg-slate-700 rounded-lg p-4 whitespace-pre-wrap mt-2 overflow-x-auto">
+            {formatFinalOutput(selectedTrace.final_output)}
           </div>
         </details>
       )}

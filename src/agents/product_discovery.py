@@ -828,9 +828,6 @@ def _generate_research_queries(requirement: str, language: str, lang_code: str) 
     """
     queries = []
 
-    # Translate the requirement to native language
-    native_requirement = translate_query_to_native(requirement, lang_code)
-
     # Hebrew-specific queries for Israel
     if lang_code == "he":
         # Extract product type from requirement
@@ -880,15 +877,15 @@ def _generate_research_queries(requirement: str, language: str, lang_code: str) 
                 },
             ])
         else:
-            # Use translated requirement
+            # Use original requirement (may be in English or Hebrew)
             queries.extend([
                 {
-                    "query": f"{native_requirement} מומלץ 2024",
+                    "query": f"{requirement} מומלץ 2024",
                     "purpose": "Finding recommended models",
                     "category": "product_recommendations"
                 },
                 {
-                    "query": f"{native_requirement} ביקורות המלצות",
+                    "query": f"{requirement} ביקורות המלצות",
                     "purpose": "Reviews and recommendations",
                     "category": "expert_opinions"
                 },
