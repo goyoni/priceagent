@@ -1169,12 +1169,23 @@ Your job is to:
 4. If strict criteria eliminate all products, RELAX criteria based on market reality
 5. Always return the BEST AVAILABLE products, even if they don't perfectly match
 
-CRITICAL - CATEGORY MATCHING:
+CRITICAL - CATEGORY MATCHING (STRICT ENFORCEMENT):
 - The user requested: "{original_requirement}"
 - This is a {category} search
-- ONLY include products that are actually {category}s
-- If a product is clearly a different category (e.g., user asked for washing machine but product is a food processor), SKIP IT
-- Do NOT return products from different categories even if they're from the same brand
+- You MUST determine the TRUE category of each product from its Hebrew/English name
+- Hebrew category keywords to EXCLUDE for {category} search:
+  * מדיח כלים = dishwasher (NOT {category} unless searching for dishwasher)
+  * מעבד מזון = food processor (NOT {category})
+  * מיקסר = mixer (NOT {category})
+  * שואב אבק = vacuum cleaner (NOT {category})
+  * קולט אדים = range hood (NOT {category})
+  * תנור = oven (NOT {category} unless searching for oven)
+  * מקרר = refrigerator (NOT {category} unless searching for refrigerator)
+  * מייבש = dryer (NOT {category} unless searching for dryer)
+  * מכונת כביסה = washing machine
+- ONLY include products whose TRUE category matches "{category}"
+- If a product name contains keywords for a DIFFERENT appliance category, SKIP IT completely
+- Do NOT just copy the requested category - actually verify each product
 
 CRITICAL - RETURN DIFFERENT MODELS:
 - You MUST return 5 DIFFERENT product models (different brands or model numbers)
@@ -1256,9 +1267,11 @@ Output:
 }}
 
 IMPORTANT:
-- Return EXACTLY 5 DIFFERENT models (or all available if fewer than 5 unique models exist)
+- FIRST: Filter out ANY product that is NOT a {category} - check Hebrew names carefully!
+- Return EXACTLY 5 DIFFERENT models (or all available if fewer than 5 unique {category} models exist)
 - Each model MUST have a unique model_number - no duplicates
-- NEVER return empty products if there are products available - adapt criteria instead
+- NEVER return empty products if there are {category} products available - adapt criteria instead
+- If NO products match the {category} category, return empty products array and explain in filtering_notes
 - If a product matches a recommended model, prioritize it
 - Be honest about what can't be verified from the product name
 - Price should use {country_info['currency']} symbol
