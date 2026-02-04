@@ -174,6 +174,7 @@ def filter_by_category(products: list, category: str, logger=None) -> list:
 
     filtered = []
     excluded_count = 0
+    no_match_count = 0
 
     for product in products:
         # Get product name from product_name or seller.name
@@ -190,14 +191,28 @@ def filter_by_category(products: list, category: str, logger=None) -> list:
                            product_name=name[:50], category=category)
             continue
 
-        filtered.append(product)
+        # Check for include keywords - product must match at least one
+        is_included = any(kw in name for kw in include_keywords)
 
-    if logger and excluded_count > 0:
+        if is_included:
+            filtered.append(product)
+        else:
+            # Product doesn't have category keywords - allow if we don't have strict keywords
+            # This handles cases where product names don't contain category terms
+            no_match_count += 1
+            if logger:
+                logger.debug("Product has no category keywords",
+                           product_name=name[:50], category=category)
+            # Still include but with lower priority (append to end)
+            filtered.append(product)
+
+    if logger and (excluded_count > 0 or no_match_count > 0):
         logger.info("Filtered products by category",
                    category=category,
                    original_count=len(products),
                    filtered_count=len(filtered),
-                   excluded_count=excluded_count)
+                   excluded_count=excluded_count,
+                   no_category_match_count=no_match_count)
 
     return filtered
 
@@ -664,7 +679,6 @@ def _parse_google_search_results(html: str) -> list[dict]:
 
     Extracts titles, snippets, and URLs from Google search result page.
     """
-    import re
     from bs4 import BeautifulSoup
 
     results = []
@@ -915,12 +929,21 @@ def _generate_research_queries(requirement: str, language: str, lang_code: str) 
     return queries
 
 
-_research_and_discover_cached = cached(
-    cache_type="agent", key_prefix="research_discover"
-)(_research_and_discover_impl)
-research_and_discover = function_tool(
-    _research_and_discover_cached, name_override="research_and_discover"
-)
+# Cache control via environment variable
+# Set DISABLE_AGENT_CACHE=true to disable caching for debugging
+_cache_disabled = os.environ.get("DISABLE_AGENT_CACHE", "").lower() in ("true", "1", "yes")
+
+if _cache_disabled:
+    research_and_discover = function_tool(
+        _research_and_discover_impl, name_override="research_and_discover"
+    )
+else:
+    _research_and_discover_cached = cached(
+        cache_type="agent", key_prefix="research_discover"
+    )(_research_and_discover_impl)
+    research_and_discover = function_tool(
+        _research_and_discover_cached, name_override="research_and_discover"
+    )
 
 
 # ============================================================================
@@ -1120,12 +1143,17 @@ async def _search_products_smart_impl(
     }, indent=2, ensure_ascii=False)
 
 
-_search_products_smart_cached = cached(
-    cache_type="agent", key_prefix="search_smart"
-)(_search_products_smart_impl)
-search_products_smart = function_tool(
-    _search_products_smart_cached, name_override="search_products_smart"
-)
+if _cache_disabled:
+    search_products_smart = function_tool(
+        _search_products_smart_impl, name_override="search_products_smart"
+    )
+else:
+    _search_products_smart_cached = cached(
+        cache_type="agent", key_prefix="search_smart"
+    )(_search_products_smart_impl)
+    search_products_smart = function_tool(
+        _search_products_smart_cached, name_override="search_products_smart"
+    )
 
 
 # ============================================================================
@@ -1533,7 +1561,6 @@ IMPORTANT:
                 model = None
                 if url:
                     # Common patterns: /product/BRAND-MODEL, /MODEL.html
-                    import re
                     model_match = re.search(r'[/-]([A-Z]{2,}[\w-]{3,20})\b', url, re.IGNORECASE)
                     if model_match:
                         model = model_match.group(1).upper()
@@ -1608,12 +1635,17 @@ IMPORTANT:
         }, indent=2, ensure_ascii=False)
 
 
-_analyze_and_format_results_cached = cached(
-    cache_type="agent", key_prefix="analyze_format"
-)(_analyze_and_format_results_impl)
-analyze_and_format_results = function_tool(
-    _analyze_and_format_results_cached, name_override="analyze_and_format_results"
-)
+if _cache_disabled:
+    analyze_and_format_results = function_tool(
+        _analyze_and_format_results_impl, name_override="analyze_and_format_results"
+    )
+else:
+    _analyze_and_format_results_cached = cached(
+        cache_type="agent", key_prefix="analyze_format"
+    )(_analyze_and_format_results_impl)
+    analyze_and_format_results = function_tool(
+        _analyze_and_format_results_cached, name_override="analyze_and_format_results"
+    )
 
 
 # ============================================================================
