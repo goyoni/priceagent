@@ -73,6 +73,43 @@ async def health_check():
     return {"status": "healthy"}
 
 
+@app.get("/debug/db")
+async def debug_db():
+    """Debug endpoint to check database configuration."""
+    from src.config.settings import settings
+    from src.db.base import get_database_url
+
+    db_url = get_database_url()
+    # Mask password in URL for security
+    masked_url = db_url
+    if "@" in db_url:
+        # postgres://user:pass@host -> postgres://user:***@host
+        parts = db_url.split("@")
+        prefix = parts[0]
+        if ":" in prefix:
+            prefix_parts = prefix.rsplit(":", 1)
+            masked_url = f"{prefix_parts[0]}:***@{parts[1]}"
+
+    result = {
+        "database_url_configured": bool(settings.database_url),
+        "is_postgres": settings.is_postgres,
+        "resolved_url": masked_url[:50] + "..." if len(masked_url) > 50 else masked_url,
+    }
+
+    # Try to connect
+    try:
+        from sqlalchemy import text
+        from src.db.session import get_db_session
+        async with get_db_session() as session:
+            await session.execute(text("SELECT 1"))
+            result["connection"] = "ok"
+    except Exception as e:
+        result["connection"] = "failed"
+        result["error"] = str(e)
+
+    return result
+
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize database on application startup."""
