@@ -1164,9 +1164,17 @@ async def _analyze_and_format_results_impl(
 
 Your job is to:
 1. FIRST: Validate criteria for logical impossibilities (e.g., "dishwasher without electricity" - all dishwashers require electricity)
-2. Score ALL products against VALID criteria
-3. If strict criteria eliminate all products, RELAX criteria based on market reality
-4. Always return the BEST AVAILABLE products, even if they don't perfectly match
+2. CATEGORY FILTER: ONLY analyze products that match the requested category "{category}"
+3. Score products against VALID criteria
+4. If strict criteria eliminate all products, RELAX criteria based on market reality
+5. Always return the BEST AVAILABLE products, even if they don't perfectly match
+
+CRITICAL - CATEGORY MATCHING:
+- The user requested: "{original_requirement}"
+- This is a {category} search
+- ONLY include products that are actually {category}s
+- If a product is clearly a different category (e.g., user asked for washing machine but product is a food processor), SKIP IT
+- Do NOT return products from different categories even if they're from the same brand
 
 CRITICAL - RETURN DIFFERENT MODELS:
 - You MUST return 5 DIFFERENT product models (different brands or model numbers)
