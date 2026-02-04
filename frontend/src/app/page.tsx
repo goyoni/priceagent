@@ -439,8 +439,21 @@ function SearchPageContent() {
   // Load trace from URL parameter on mount
   useEffect(() => {
     const traceId = searchParams.get('trace');
-    if (traceId && traceId !== priceSearchTraceId) {
-      loadTraceResults(traceId);
+    const tab = searchParams.get('tab');
+
+    if (traceId) {
+      if (tab === 'discover') {
+        // Discovery trace - load using discovery store
+        // Find the query from history, or use empty string as fallback
+        const historyItem = discoveryHistory.find(h => h.traceId === traceId);
+        const query = historyItem?.query || '';
+        if (discoveryCurrentTraceId !== traceId) {
+          loadDiscoveryFromTrace(traceId, query);
+        }
+      } else if (traceId !== priceSearchTraceId) {
+        // Price search trace
+        loadTraceResults(traceId);
+      }
     } else if (!traceId && priceSearchTraceId) {
       // Trace param was removed (e.g., switching tabs) - clear results
       setPriceSearchTraceId(null);
@@ -450,7 +463,7 @@ function SearchPageContent() {
       setRawResultText(null);
       setQuery('');
     }
-  }, [searchParams]);
+  }, [searchParams, discoveryHistory, discoveryCurrentTraceId]);
 
   // Function to load results from an existing trace
   const loadTraceResults = async (traceId: string) => {
