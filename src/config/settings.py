@@ -16,12 +16,6 @@ class Settings(BaseSettings):
         description="OpenAI API key (required for agent functionality)",
     )
 
-    # SerpAPI for Google Search/Shopping
-    serpapi_key: Optional[str] = Field(
-        default=None,
-        description="SerpAPI key for Google Shopping and Search integration",
-    )
-
     # WhatsApp Bridge
     whatsapp_bridge_url: str = Field(
         default="http://localhost:8080",
