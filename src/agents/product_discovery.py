@@ -562,9 +562,9 @@ Based on this research, provide:
     }}
   ],
   "search_terms": {{
-    "native_language": ["search terms in {language} - ALWAYS include native language terms"],
-    "model_searches": ["specific model searches - should have 5+ different models"],
-    "category_searches": ["category + feature searches in {language}"]
+    "native_language": ["search terms in {language} - include color/style terms if user specified (e.g., 'תנור נירוסטה מושחרת' for blackened stainless oven)"],
+    "model_searches": ["specific model searches - should have 5+ different models that match user's color/style if specified"],
+    "category_searches": ["category + attribute searches in {language} (e.g., 'תנור בילט אין שחור' for black built-in oven)"]
   }},
   "price_range": {{
     "min": number,
@@ -579,6 +579,8 @@ Based on this research, provide:
 
 REMEMBER:
 - Find AT LEAST 5 different product models
+- If user specified a COLOR/STYLE (like 'black', 'stainless steel', 'נירוסטה מושחרת'), prioritize models in that color
+- Include search terms with the color/style in native language
 - Include ALL domain-specific criteria even if user didn't ask
 - Be transparent about which criteria came from user vs. domain knowledge"""
 
