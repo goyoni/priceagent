@@ -978,7 +978,8 @@ async def _search_products_smart_impl(
         if url_key:
             seen_urls.add(url_key)
 
-        name = result.seller.name
+        # Use product_name if available, otherwise fall back to seller name
+        name = result.product_name or result.seller.name
         products.append({
             "name": name,
             "brand": extract_brand(name),

@@ -66,6 +66,7 @@ class PriceOption(BaseModel):
 
     id: str = Field(default_factory=generate_id)
     product_id: str
+    product_name: Optional[str] = None  # Actual product name (e.g., "Bosch HBG634BS1")
     seller: SellerInfo
     listed_price: float
     currency: str = "ILS"
