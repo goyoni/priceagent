@@ -978,7 +978,8 @@ async def _search_products_smart_impl(
         if url_key:
             seen_urls.add(url_key)
 
-        name = result.seller.name
+        # Use product_name if available, otherwise fall back to seller name
+        name = result.product_name or result.seller.name
         products.append({
             "name": name,
             "brand": extract_brand(name),
@@ -1274,7 +1275,20 @@ IMPORTANT:
 
         result = json.loads(result_text)
 
-        # Build set of valid products from search results
+        # Check raw data quality - if products lack model numbers, we can't validate
+        products_with_models = sum(1 for p in products if p.get("model_number"))
+        raw_data_has_models = products_with_models >= len(products) * 0.3  # At least 30% have models
+
+        # Build set of valid products from search results (for URL matching)
+        valid_urls = set()
+        url_to_product = {}
+        for p in products:
+            url = (p.get("url") or "").strip().lower()
+            if url:
+                valid_urls.add(url)
+                url_to_product[url] = p
+
+        # Build model/name sets only if raw data has models
         valid_models = set()
         valid_names = set()
         products_with_urls = {}  # model/name -> url mapping
@@ -1289,26 +1303,36 @@ IMPORTANT:
                 if name not in products_with_urls:
                     products_with_urls[name] = p.get("url")
 
-        # Filter out products not found in local stores
+        # Filter/validate products
         filtered_products = []
         for product in result.get("products", []):
             model = (product.get("model_number") or "").strip().lower()
             name = (product.get("name") or "").strip().lower()
+            product_url = (product.get("url") or "").strip().lower()
 
             # Check if product was found in local stores
             is_valid = False
             matched_key = None
+            matched_url = None
 
-            # Check by model number
-            if model:
+            # First try to match by URL (most reliable)
+            if product_url:
+                for valid_url in valid_urls:
+                    if product_url == valid_url or product_url in valid_url or valid_url in product_url:
+                        is_valid = True
+                        matched_url = valid_url
+                        break
+
+            # If raw data has models, try to match by model number
+            if not is_valid and raw_data_has_models and model:
                 for valid_model in valid_models:
                     if model in valid_model or valid_model in model:
                         is_valid = True
                         matched_key = valid_model
                         break
 
-            # Check by name if model didn't match
-            if not is_valid and name:
+            # Check by name if model didn't match (only if raw data has models)
+            if not is_valid and raw_data_has_models and name:
                 for valid_name in valid_names:
                     # Fuzzy match - check if significant overlap
                     if len(name) > 10 and (name in valid_name or valid_name in name):
@@ -1316,10 +1340,22 @@ IMPORTANT:
                         matched_key = valid_name
                         break
 
+            # If raw data lacks models, trust LLM output (it's already instructed to only use search results)
+            if not is_valid and not raw_data_has_models:
+                is_valid = True
+                logger.info(
+                    "Trusting LLM product (raw data lacks model numbers)",
+                    model=model,
+                    name=name[:50] if name else None
+                )
+
             if is_valid:
                 # Add URL from original search if not present
-                if not product.get("url") and matched_key:
-                    product["url"] = products_with_urls.get(matched_key)
+                if not product.get("url"):
+                    if matched_url:
+                        product["url"] = url_to_product.get(matched_url, {}).get("url")
+                    elif matched_key:
+                        product["url"] = products_with_urls.get(matched_key)
                 filtered_products.append(product)
             else:
                 logger.warning(

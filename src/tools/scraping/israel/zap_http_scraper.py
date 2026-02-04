@@ -113,7 +113,25 @@ class ZapHttpScraper(BaseScraper):
 
         # Extract product name from title
         title_elem = soup.select_one("title")
-        product_name = title_elem.get_text().split(" - ")[0] if title_elem else query
+        product_name = title_elem.get_text().split(" - ")[0].strip() if title_elem else query
+
+        # Also try to extract model number from the page
+        model_number = None
+        model_elem = soup.select_one("[itemprop='model'], .model-number, .sku")
+        if model_elem:
+            model_number = model_elem.get_text(strip=True)
+        if not model_number:
+            import re
+            from urllib.parse import unquote
+            decoded_url = unquote(page_url)
+            model_match = re.search(r'([a-zA-Z]+[-_]?[a-zA-Z0-9]{5,15})', decoded_url)
+            if model_match:
+                potential_model = model_match.group(1).upper()
+                if re.search(r'[A-Z]', potential_model) and re.search(r'[0-9]', potential_model):
+                    model_number = potential_model
+
+        if model_number and model_number not in product_name:
+            product_name = f"{product_name} ({model_number})"
 
         # Primary: Find seller listings from compare table (has all stores with prices)
         compare_rows = soup.select(".compare-item-row.product-item")
@@ -121,7 +139,7 @@ class ZapHttpScraper(BaseScraper):
             logger.info("Found compare-item rows", count=len(compare_rows))
             for row in compare_rows[:max_results]:
                 try:
-                    result = self._parse_compare_row(row, query, page_url)
+                    result = self._parse_compare_row(row, query, page_url, product_name)
                     if result:
                         results.append(result)
                 except Exception as e:
@@ -134,7 +152,7 @@ class ZapHttpScraper(BaseScraper):
 
             for bid in bid_rows:
                 try:
-                    result = self._parse_bid_row(bid, query, page_url)
+                    result = self._parse_bid_row(bid, query, page_url, product_name)
                     if result:
                         results.append(result)
                 except Exception as e:
@@ -160,6 +178,7 @@ class ZapHttpScraper(BaseScraper):
 
                         results.append(PriceOption(
                             product_id=query,
+                            product_name=product_name,
                             seller=seller,
                             listed_price=price,
                             currency="ILS",
@@ -169,7 +188,7 @@ class ZapHttpScraper(BaseScraper):
 
         return results
 
-    def _parse_compare_row(self, row, query: str, page_url: str) -> Optional[PriceOption]:
+    def _parse_compare_row(self, row, query: str, page_url: str, product_name: Optional[str] = None) -> Optional[PriceOption]:
         """Parse a compare-item-row element."""
         # Get store name - check row attributes first, then child elements
         store_name = row.get("data-site-name")
@@ -278,6 +297,7 @@ class ZapHttpScraper(BaseScraper):
 
         return PriceOption(
             product_id=query,
+            product_name=product_name,
             seller=seller,
             listed_price=price,
             currency="ILS",
@@ -285,7 +305,7 @@ class ZapHttpScraper(BaseScraper):
             scraped_at=datetime.now(),
         )
 
-    def _parse_bid_row(self, bid, query: str, page_url: str) -> Optional[PriceOption]:
+    def _parse_bid_row(self, bid, query: str, page_url: str, product_name: Optional[str] = None) -> Optional[PriceOption]:
         """Parse a bid-row element (featured seller)."""
         # Extract store name - check element attributes first, then data attribute
         store_name = bid.get("data-site-name")
@@ -397,6 +417,7 @@ class ZapHttpScraper(BaseScraper):
 
         return PriceOption(
             product_id=query,
+            product_name=product_name,
             seller=seller,
             listed_price=price,
             currency="ILS",

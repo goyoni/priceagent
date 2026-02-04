@@ -110,7 +110,20 @@ echo -e "${YELLOW}Pulling latest main...${NC}"
 git pull origin main
 
 echo -e "${YELLOW}Merging development into main...${NC}"
-git merge development -m "Release ${VERSION}: Merge development into main"
+# Use -X theirs for frontend/out to avoid build hash conflicts
+if ! git merge development -m "Release ${VERSION}: Merge development into main"; then
+    echo -e "${YELLOW}Merge conflict detected, resolving frontend/out conflicts...${NC}"
+    # Accept development's version for all frontend/out conflicts
+    git checkout --theirs frontend/out/ 2>/dev/null || true
+    git add frontend/out/
+    # Clean up any deleted files that conflict
+    git diff --name-only --diff-filter=U | while read file; do
+        if [[ "$file" == frontend/out/* ]]; then
+            git add "$file" 2>/dev/null || git rm "$file" 2>/dev/null || true
+        fi
+    done
+    git commit -m "Release ${VERSION}: Merge development into main"
+fi
 
 # Tag the release
 echo -e "${YELLOW}Creating release tag...${NC}"

@@ -176,10 +176,12 @@ class AlmScraper(BaseScraper):
         sku = item.get("sku", "")
         url_key = item.get("url_key", sku)
         product_url = f"{self.base_url}/{url_key}.html"
+        product_name = item.get("name", sku)  # Use product name from API
 
         return PriceOption(
             id=f"alm_{sku}",
             product_id=sku,
+            product_name=product_name,
             seller=SellerInfo(
                 id="alm",
                 name="א.ל.מ",
