@@ -102,6 +102,94 @@ def get_openai_client() -> AsyncOpenAI:
     return AsyncOpenAI(api_key=api_key)
 
 
+# Category keywords for filtering search results
+# Maps category to keywords that identify products IN that category
+CATEGORY_KEYWORDS = {
+    "washing_machine": {
+        "include": ["מכונת כביסה", "washing machine", "washer", "כביסה"],
+        "exclude": ["מדיח", "dishwasher", "מייבש", "dryer", "מעבד מזון", "food processor",
+                   "מיקסר", "mixer", "שואב", "vacuum", "קולט אדים", "range hood", "תנור", "oven"],
+    },
+    "dishwasher": {
+        "include": ["מדיח כלים", "מדיח", "dishwasher"],
+        "exclude": ["מכונת כביסה", "washing machine", "washer", "מייבש", "dryer"],
+    },
+    "refrigerator": {
+        "include": ["מקרר", "refrigerator", "fridge"],
+        "exclude": ["מדיח", "dishwasher", "מכונת כביסה", "washing machine"],
+    },
+    "oven": {
+        "include": ["תנור", "oven", "בילט אין"],
+        "exclude": ["מיקרוגל", "microwave", "מדיח", "dishwasher"],
+    },
+    "dryer": {
+        "include": ["מייבש", "מייבש כביסה", "dryer"],
+        "exclude": ["מכונת כביסה", "washing machine", "מדיח", "dishwasher"],
+    },
+    "air_conditioner": {
+        "include": ["מזגן", "air conditioner", "ac", "מיזוג"],
+        "exclude": ["מאוורר", "fan", "מפזר חום", "heater"],
+    },
+    "vacuum_cleaner": {
+        "include": ["שואב אבק", "vacuum", "שואב"],
+        "exclude": ["מדיח", "dishwasher", "מכונת כביסה", "washing machine"],
+    },
+}
+
+
+def filter_by_category(products: list, category: str, logger=None) -> list:
+    """Filter products to only include those matching the requested category.
+
+    This prevents wrong product types from polluting search results
+    (e.g., dishwashers appearing in washing machine search).
+
+    Args:
+        products: List of PriceOption objects from scrapers
+        category: The category being searched for (e.g., "washing_machine")
+        logger: Optional logger for debug output
+
+    Returns:
+        Filtered list of products matching the category
+    """
+    category_config = CATEGORY_KEYWORDS.get(category.lower())
+
+    if not category_config:
+        # Unknown category - can't filter, return all
+        return products
+
+    include_keywords = [k.lower() for k in category_config.get("include", [])]
+    exclude_keywords = [k.lower() for k in category_config.get("exclude", [])]
+
+    filtered = []
+    excluded_count = 0
+
+    for product in products:
+        # Get product name from product_name or seller.name
+        name = (getattr(product, 'product_name', None) or
+                getattr(product.seller, 'name', '') or '').lower()
+
+        # Check for exclude keywords first (more specific)
+        is_excluded = any(kw in name for kw in exclude_keywords)
+
+        if is_excluded:
+            excluded_count += 1
+            if logger:
+                logger.debug("Excluded product by category",
+                           product_name=name[:50], category=category)
+            continue
+
+        filtered.append(product)
+
+    if logger and excluded_count > 0:
+        logger.info("Filtered products by category",
+                   category=category,
+                   original_count=len(products),
+                   filtered_count=len(filtered),
+                   excluded_count=excluded_count)
+
+    return filtered
+
+
 async def detect_category_with_llm(requirement: str) -> str:
     """Use LLM to detect the product category from a user requirement.
 
@@ -965,6 +1053,16 @@ async def _search_products_smart_impl(
     # Deduplicate results
     if all_results:
         all_results = deduplicate_results(all_results)
+
+    # Filter by category to remove wrong product types BEFORE LLM analysis
+    if all_results and category:
+        original_count = len(all_results)
+        all_results = filter_by_category(all_results, category, logger)
+        if len(all_results) < original_count:
+            await report_progress(
+                "🔍 Category filter",
+                f"Filtered {original_count - len(all_results)} products not matching '{category}'"
+            )
 
     # Convert to simple format
     products = []
