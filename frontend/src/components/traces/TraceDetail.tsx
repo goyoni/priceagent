@@ -304,7 +304,7 @@ export function TraceDetail() {
           <summary className="text-sm font-medium text-slate-400 mb-2 cursor-pointer hover:text-cyan-400">
             Raw Output
           </summary>
-          <div className="bg-background rounded-lg p-4 text-sm whitespace-pre-wrap mt-2">
+          <div className="bg-slate-700 rounded-lg p-4 text-sm whitespace-pre-wrap mt-2 text-slate-300">
             {selectedTrace.final_output}
           </div>
         </details>

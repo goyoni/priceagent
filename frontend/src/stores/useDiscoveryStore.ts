@@ -256,13 +256,20 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
         productCount: products.length,
       });
 
+      // Normalize criteria_feedback to always be an array
+      const criteriaFeedback = Array.isArray(response.criteria_feedback)
+        ? response.criteria_feedback
+        : response.criteria_feedback
+          ? [response.criteria_feedback]
+          : [];
+
       // Update the history state to reflect the change
       set((state) => ({
         products,
         searchSummary: response.search_summary || null,
         noResultsMessage: response.no_results_message || null,
         suggestions: response.suggestions || [],
-        criteriaFeedback: response.criteria_feedback || [],
+        criteriaFeedback,
         isSearching: false,
         statusMessage: null,
         history: state.history.map(h =>
@@ -273,12 +280,19 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
         messages: [...state.messages, assistantMessage],
       }));
     } else {
+      // Normalize criteria_feedback to always be an array
+      const criteriaFeedback = Array.isArray(response.criteria_feedback)
+        ? response.criteria_feedback
+        : response.criteria_feedback
+          ? [response.criteria_feedback]
+          : [];
+
       set((state) => ({
         products,
         searchSummary: response.search_summary || null,
         noResultsMessage: response.no_results_message || null,
         suggestions: response.suggestions || [],
-        criteriaFeedback: response.criteria_feedback || [],
+        criteriaFeedback,
         isSearching: false,
         statusMessage: null,
         messages: [...state.messages, assistantMessage],
@@ -373,12 +387,19 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
       // Note: Child traces (refinements) are not loaded from history since it would require
       // authenticated access to the traces list. Users can continue refining from this point.
 
+      // Normalize criteria_feedback to always be an array
+      const criteriaFeedback = Array.isArray(latestResponse.criteria_feedback)
+        ? latestResponse.criteria_feedback
+        : latestResponse.criteria_feedback
+          ? [latestResponse.criteria_feedback]
+          : [];
+
       set({
         products: latestProducts,
         searchSummary: latestResponse.search_summary || null,
         noResultsMessage: latestResponse.no_results_message || null,
         suggestions: latestResponse.suggestions || [],
-        criteriaFeedback: latestResponse.criteria_feedback || [],
+        criteriaFeedback,
         isSearching: false,
         isLoadingFromHistory: false,
         statusMessage: null,

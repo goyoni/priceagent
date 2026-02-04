@@ -3,7 +3,7 @@
 import asyncio
 import json
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -391,7 +391,7 @@ class TraceStore:
 
     async def clear_stale_traces(self, stuck_timeout_minutes: int = 60) -> dict:
         """Clear stale traces (stuck in RUNNING state for too long)."""
-        now = datetime.now(timezone.utc)
+        now = datetime.utcnow()
         stuck_threshold = now - timedelta(minutes=stuck_timeout_minutes)
 
         deleted_stuck = 0

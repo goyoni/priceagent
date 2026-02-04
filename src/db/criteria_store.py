@@ -6,7 +6,7 @@ them for future use.
 """
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Optional
 
 import structlog
@@ -63,7 +63,7 @@ class CriteriaStore:
 
             if existing is None:
                 # Seed with default criteria
-                now = datetime.now(timezone.utc)
+                now = datetime.utcnow()
                 for category, criteria in SEED_CRITERIA.items():
                     model = CategoryCriteria(
                         category=category.lower(),
@@ -99,7 +99,7 @@ class CriteriaStore:
         await self.initialize()
 
         criteria_json = json.dumps(criteria, ensure_ascii=False)
-        now = datetime.now(timezone.utc)
+        now = datetime.utcnow()
 
         session_factory = get_async_session_factory()
         async with session_factory() as session:
