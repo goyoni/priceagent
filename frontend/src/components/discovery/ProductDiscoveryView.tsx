@@ -528,6 +528,42 @@ export function ProductDiscoveryView({
             </button>
           </div>
 
+          {/* Search criteria used - always show when available */}
+          {searchSummary?.criteria_used && searchSummary.criteria_used.length > 0 && (
+            <div className="mb-4 p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-indigo-700 text-sm font-medium">
+                  Search criteria ({searchSummary.criteria_used.length}):
+                </span>
+                <span className="text-gray-500 text-xs">
+                  {searchSummary.category && `Category: ${searchSummary.category}`}
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {searchSummary.criteria_used.slice(0, 8).map((criterion, idx) => (
+                  <span
+                    key={idx}
+                    className="inline-flex items-center px-2 py-1 text-xs rounded-full bg-white border border-indigo-200 text-gray-700"
+                    title={criterion.explanation || criterion.market_context || undefined}
+                  >
+                    <span className="font-medium text-indigo-600 mr-1">{criterion.attribute}:</span>
+                    <span>
+                      {criterion.market_value || criterion.value || criterion.ideal_value || 'any'}
+                    </span>
+                    {criterion.source === 'user' && (
+                      <span className="ml-1 text-indigo-400 text-[10px]">(you)</span>
+                    )}
+                  </span>
+                ))}
+                {searchSummary.criteria_used.length > 8 && (
+                  <span className="text-xs text-gray-400 self-center">
+                    +{searchSummary.criteria_used.length - 8} more
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Market notes / Filtering notes - show when criteria were adapted */}
           {searchSummary?.filtering_notes && (
             <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">

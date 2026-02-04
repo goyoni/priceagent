@@ -505,6 +505,7 @@ class ZapHttpScraper(BaseScraper):
 
         return PriceOption(
             product_id=query,
+            product_name=product_name,  # Use extracted product name
             seller=seller,
             listed_price=price,
             currency="ILS",
@@ -541,6 +542,7 @@ class ZapHttpScraper(BaseScraper):
 
         return PriceOption(
             product_id=query,
+            product_name=name,  # Use extracted product name
             seller=seller,
             listed_price=float(price),
             currency="ILS",
