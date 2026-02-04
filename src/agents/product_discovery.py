@@ -119,7 +119,11 @@ CATEGORY_KEYWORDS = {
         "exclude": ["מדיח", "dishwasher", "מכונת כביסה", "washing machine"],
     },
     "oven": {
-        "include": ["תנור", "oven", "בילט אין"],
+        "include": ["תנור", "oven", "בילט אין", "built-in", "integrated"],
+        "exclude": ["מיקרוגל", "microwave", "מדיח", "dishwasher"],
+    },
+    "integrated_oven": {
+        "include": ["תנור", "oven", "בילט אין", "built-in", "integrated"],
         "exclude": ["מיקרוגל", "microwave", "מדיח", "dishwasher"],
     },
     "dryer": {
@@ -151,7 +155,15 @@ def filter_by_category(products: list, category: str, logger=None) -> list:
     Returns:
         Filtered list of products matching the category
     """
-    category_config = CATEGORY_KEYWORDS.get(category.lower())
+    category_lower = category.lower().replace(" ", "_")
+    category_config = CATEGORY_KEYWORDS.get(category_lower)
+
+    # Try partial match if exact match fails (e.g., "integrated_oven" -> try "oven")
+    if not category_config:
+        for key in CATEGORY_KEYWORDS:
+            if key in category_lower or category_lower in key:
+                category_config = CATEGORY_KEYWORDS[key]
+                break
 
     if not category_config:
         # Unknown category - can't filter, return all
