@@ -18,24 +18,27 @@ export function ShoppingListView({ onSwitchToDiscover, onSearchStarted, country 
   const { items, removeItem, clearList, addItem, startPriceSearch, isSearching } = useShoppingListStore();
 
   const [isAddingManual, setIsAddingManual] = useState(false);
-  const [manualProduct, setManualProduct] = useState('');
   const [manualModel, setManualModel] = useState('');
+  const [isLookingUp, setIsLookingUp] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
 
-  const handleAddManual = useCallback((e: React.FormEvent) => {
+  const handleAddManual = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!manualProduct.trim()) return;
+    if (!manualModel.trim()) return;
 
+    const modelNumber = manualModel.trim();
+
+    // Use model number as product name initially
+    // The price search will find the actual product name
     addItem({
-      product_name: manualProduct.trim(),
-      model_number: manualModel.trim() || undefined,
+      product_name: modelNumber,
+      model_number: modelNumber,
       source: 'manual',
     });
 
-    setManualProduct('');
     setManualModel('');
     setIsAddingManual(false);
-  }, [manualProduct, manualModel, addItem]);
+  }, [manualModel, addItem]);
 
   const handleClearList = useCallback(() => {
     if (window.confirm('Are you sure you want to clear your entire shopping list?')) {
@@ -101,29 +104,20 @@ export function ShoppingListView({ onSwitchToDiscover, onSearchStarted, country 
         {isAddingManual && (
           <form onSubmit={handleAddManual} className="mt-4 p-4 bg-gray-50 rounded-lg space-y-3">
             <div>
-              <label className="block text-sm text-gray-500 mb-1">Product Name *</label>
+              <label className="block text-sm text-gray-500 mb-1">Model Number</label>
               <input
                 type="text"
-                value={manualProduct}
-                onChange={(e) => setManualProduct(e.target.value)}
-                placeholder="e.g., Samsung Refrigerator"
+                value={manualModel}
+                onChange={(e) => setManualModel(e.target.value)}
+                placeholder="e.g., RF72DG9620B1 or WW90T554DAW"
                 className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg
                          text-gray-800 placeholder-gray-400 outline-none
                          focus:border-indigo-500 transition-colors"
                 autoFocus
               />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-500 mb-1">Model Number (optional)</label>
-              <input
-                type="text"
-                value={manualModel}
-                onChange={(e) => setManualModel(e.target.value)}
-                placeholder="e.g., RF72DG9620B1"
-                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg
-                         text-gray-800 placeholder-gray-400 outline-none
-                         focus:border-indigo-500 transition-colors"
-              />
+              <p className="text-xs text-gray-400 mt-1">
+                Enter the product model number - we'll find the details automatically
+              </p>
             </div>
             <div className="flex justify-end gap-2">
               <button
@@ -135,7 +129,7 @@ export function ShoppingListView({ onSwitchToDiscover, onSearchStarted, country 
               </button>
               <button
                 type="submit"
-                disabled={!manualProduct.trim()}
+                disabled={!manualModel.trim()}
                 className="px-4 py-1.5 text-sm bg-indigo-500 text-white rounded-lg
                          hover:bg-indigo-400 disabled:bg-gray-200 disabled:text-gray-400
                          transition-colors"
@@ -230,7 +224,7 @@ export function ShoppingListView({ onSwitchToDiscover, onSearchStarted, country 
                       d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
                     />
                   </svg>
-                  Search Prices for All Items
+                  Find Lowest Prices
                 </>
               )}
             </button>

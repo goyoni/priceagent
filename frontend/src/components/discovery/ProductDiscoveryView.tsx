@@ -587,117 +587,157 @@ export function ProductDiscoveryView({
             isAddingId={addingProductId}
           />
 
-          {/* Conversation refinement section */}
+          {/* Conversation refinement section - WhatsApp style */}
           {sessionId && (
-            <div className="mt-6 border-t border-gray-200 pt-6">
-              <h3 className="text-sm font-medium text-gray-600 mb-3">
-                Refine your search
-              </h3>
+            <div className="mt-6 border-t border-gray-200 pt-4">
+              {/* Chat container */}
+              <div className="bg-gradient-to-b from-gray-50 to-gray-100 rounded-xl border border-gray-200 overflow-hidden">
+                {/* Chat header */}
+                <div className="bg-indigo-600 px-4 py-2 flex items-center gap-2">
+                  <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
+                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <div className="text-white text-sm font-medium">Refine your search</div>
+                    <div className="text-white/70 text-xs">
+                      {isSearching ? 'Searching...' : 'Online'}
+                    </div>
+                  </div>
+                </div>
 
-              {/* Conversation history */}
-              {messages.length > 1 && (
-                <div className="mb-4 max-h-40 overflow-y-auto space-y-2 pr-2">
-                  {messages.slice(1).map((msg) => {
-                    const isAssistant = msg.role === 'assistant';
-                    const isSelected = isAssistant && msg.traceId === currentTraceId;
-                    const isClickable = isAssistant && msg.productsSnapshot && msg.productsSnapshot.length > 0;
+                {/* Messages area */}
+                <div className="p-4 max-h-64 overflow-y-auto space-y-3" style={{ minHeight: messages.length > 1 ? '120px' : '60px' }}>
+                  {messages.length <= 1 ? (
+                    <div className="text-center text-gray-400 text-sm py-2">
+                      Ask me to refine your results...
+                    </div>
+                  ) : (
+                    messages.slice(1).map((msg) => {
+                      const isUser = msg.role === 'user';
+                      const isAssistant = msg.role === 'assistant';
+                      const isSelected = isAssistant && msg.traceId === currentTraceId;
+                      const isClickable = isAssistant && msg.productsSnapshot && msg.productsSnapshot.length > 0;
 
-                    return (
-                      <div
-                        key={msg.id}
-                        onClick={() => {
-                          if (isClickable) {
-                            loadFromMessage(msg.id);
-                          }
-                        }}
-                        className={`text-sm rounded-lg px-3 py-2 ${
-                          msg.role === 'user'
-                            ? 'bg-indigo-50 text-indigo-700 ml-8'
-                            : `mr-8 ${isSelected
-                                ? 'bg-indigo-100 text-indigo-700 border border-indigo-300'
-                                : 'bg-gray-50 text-gray-600'
-                              } ${isClickable ? 'cursor-pointer hover:bg-gray-100' : ''}`
-                        }`}
-                        title={isClickable ? 'Click to view these results' : undefined}
-                      >
-                        <span className="font-medium">
-                          {msg.role === 'user' ? 'You' : 'AI'}:
-                        </span>{' '}
-                        {msg.content}
-                        {isClickable && (
-                          <span className="ml-1 text-xs text-gray-400">
-                            (click to view)
-                          </span>
-                        )}
+                      return (
+                        <div
+                          key={msg.id}
+                          className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}
+                        >
+                          <div
+                            onClick={() => {
+                              if (isClickable) {
+                                loadFromMessage(msg.id);
+                              }
+                            }}
+                            className={`max-w-[80%] px-3 py-2 rounded-2xl text-sm relative
+                              ${isUser
+                                ? 'bg-indigo-500 text-white rounded-br-md'
+                                : `${isSelected
+                                    ? 'bg-white border-2 border-indigo-400 text-gray-800'
+                                    : 'bg-white text-gray-700 border border-gray-200'
+                                  } rounded-bl-md shadow-sm ${isClickable ? 'cursor-pointer hover:border-indigo-300' : ''}`
+                              }`}
+                            title={isClickable ? 'Click to view these results' : undefined}
+                          >
+                            {msg.content}
+                            {isClickable && (
+                              <div className="mt-1 flex items-center gap-1 text-xs text-indigo-500">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                </svg>
+                                View results
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+
+                  {/* Typing indicator when searching */}
+                  {isSearching && (
+                    <div className="flex justify-start">
+                      <div className="bg-white text-gray-500 px-4 py-2 rounded-2xl rounded-bl-md shadow-sm border border-gray-200">
+                        <div className="flex items-center gap-1">
+                          <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                          <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                          <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                        </div>
                       </div>
-                    );
-                  })}
+                    </div>
+                  )}
+
                   <div ref={chatEndRef} />
                 </div>
-              )}
 
-              {/* Refinement input */}
-              <form onSubmit={handleRefinementSubmit} className="flex gap-2">
-                <input
-                  type="text"
-                  value={refinementInput}
-                  onChange={(e) => setRefinementInput(e.target.value)}
-                  placeholder="e.g., 'show cheaper options' or 'prefer Samsung'"
-                  dir="auto"
-                  className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg
-                           text-gray-800 placeholder-gray-400 text-sm outline-none
-                           focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20
-                           transition-all duration-300"
-                  disabled={isSearching}
-                />
-                <button
-                  type="submit"
-                  disabled={isSearching || !refinementInput.trim()}
-                  className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-blue-500
-                           hover:from-indigo-400 hover:to-blue-400
-                           disabled:from-gray-200 disabled:to-gray-200
-                           text-white text-sm font-medium rounded-lg
-                           transition-all duration-300 flex items-center gap-1"
-                >
-                  {isSearching ? (
-                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                        fill="none"
-                      />
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                      />
-                    </svg>
-                  ) : (
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                    </svg>
-                  )}
-                  Refine
-                </button>
-              </form>
+                {/* Input area */}
+                <div className="bg-gray-100 px-3 py-2 border-t border-gray-200">
+                  <form onSubmit={handleRefinementSubmit} className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={refinementInput}
+                      onChange={(e) => setRefinementInput(e.target.value)}
+                      placeholder="Type a message..."
+                      dir="auto"
+                      className="flex-1 px-4 py-2 bg-white border border-gray-200 rounded-full
+                               text-gray-800 placeholder-gray-400 text-sm outline-none
+                               focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20
+                               transition-all duration-200"
+                      disabled={isSearching}
+                    />
+                    <button
+                      type="submit"
+                      disabled={isSearching || !refinementInput.trim()}
+                      className="w-10 h-10 flex items-center justify-center
+                               bg-indigo-500 hover:bg-indigo-600
+                               disabled:bg-gray-300
+                               text-white rounded-full
+                               transition-all duration-200 flex-shrink-0"
+                    >
+                      {isSearching ? (
+                        <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                            fill="none"
+                          />
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                          />
+                        </svg>
+                      ) : (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                        </svg>
+                      )}
+                    </button>
+                  </form>
 
-              {/* Quick refinement suggestions */}
-              <div className="mt-2 flex flex-wrap gap-2">
-                {['cheaper options', 'quieter models', 'larger capacity', 'different brands'].map((suggestion) => (
-                  <button
-                    key={suggestion}
-                    onClick={() => setRefinementInput(suggestion)}
-                    disabled={isSearching}
-                    className="text-xs text-gray-500 bg-white hover:bg-gray-100
-                             px-2 py-1 rounded transition-colors disabled:opacity-50"
-                  >
-                    {suggestion}
-                  </button>
-                ))}
+                  {/* Quick suggestions */}
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {['cheaper options', 'quieter models', 'larger capacity', 'different brands'].map((suggestion) => (
+                      <button
+                        key={suggestion}
+                        onClick={() => setRefinementInput(suggestion)}
+                        disabled={isSearching}
+                        className="text-xs text-indigo-600 bg-indigo-50 hover:bg-indigo-100
+                                 px-2.5 py-1 rounded-full transition-colors disabled:opacity-50
+                                 border border-indigo-200"
+                      >
+                        {suggestion}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           )}
