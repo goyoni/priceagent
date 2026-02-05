@@ -1,11 +1,12 @@
 #!/bin/bash
 #
-# Run the full stack: Python backend + Next.js frontend
+# Run the full stack: Python backend + Next.js frontend (server mode)
 #
-# Usage: ./run.sh [--with-logging]
+# Usage: ./run.sh [--with-logging] [--dev]
 #
 # Options:
 #   --with-logging    Start Grafana/Loki logging stack
+#   --dev             Run Next.js in development mode (hot reload)
 #
 
 set -e
@@ -19,12 +20,17 @@ NC='\033[0m' # No Color
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 FRONTEND_DIR="$PROJECT_DIR/frontend"
 WITH_LOGGING=false
+DEV_MODE=false
 
 # Parse arguments
 for arg in "$@"; do
     case $arg in
         --with-logging)
             WITH_LOGGING=true
+            shift
+            ;;
+        --dev)
+            DEV_MODE=true
             shift
             ;;
     esac
@@ -96,21 +102,23 @@ if [ "$WITH_LOGGING" = true ]; then
     fi
 fi
 
-# Build frontend for production (serves on port 8000)
-echo ""
-echo -e "${YELLOW}Building frontend...${NC}"
-cd "$FRONTEND_DIR"
+# Build Next.js for production (if not dev mode)
+if [ "$DEV_MODE" = false ]; then
+    echo ""
+    echo -e "${YELLOW}Building Next.js for production...${NC}"
+    cd "$FRONTEND_DIR"
 
-# Clear .next cache to prevent corruption issues
-rm -rf .next
+    # Clear .next cache to prevent corruption issues
+    rm -rf .next
 
-if npm run build; then
-    echo -e "${GREEN}✓${NC} Frontend built (static files in frontend/out/)"
-else
-    echo -e "${RED}✗${NC} Frontend build failed"
-    exit 1
+    if npm run build; then
+        echo -e "${GREEN}✓${NC} Next.js built successfully"
+    else
+        echo -e "${RED}✗${NC} Next.js build failed"
+        exit 1
+    fi
+    cd "$PROJECT_DIR"
 fi
-cd "$PROJECT_DIR"
 
 # Function to cleanup background processes on exit
 cleanup() {
@@ -135,10 +143,17 @@ trap cleanup SIGINT SIGTERM
 
 # Start Next.js frontend in background
 echo ""
-echo -e "${YELLOW}Starting Next.js frontend...${NC}"
-cd "$FRONTEND_DIR"
-npm run dev > /dev/null 2>&1 &
-FRONTEND_PID=$!
+if [ "$DEV_MODE" = true ]; then
+    echo -e "${YELLOW}Starting Next.js frontend (development mode)...${NC}"
+    cd "$FRONTEND_DIR"
+    npm run dev > /dev/null 2>&1 &
+    FRONTEND_PID=$!
+else
+    echo -e "${YELLOW}Starting Next.js frontend (production mode)...${NC}"
+    cd "$FRONTEND_DIR"
+    npm run start > /dev/null 2>&1 &
+    FRONTEND_PID=$!
+fi
 cd "$PROJECT_DIR"
 
 # Wait for frontend to start
@@ -155,12 +170,11 @@ echo ""
 echo -e "${YELLOW}Starting Python backend...${NC}"
 echo ""
 echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN}  App:       http://localhost:8000     ${NC}"
-echo -e "${GREEN}  Dev:       http://localhost:3000     ${NC}"
-echo -e "${GREEN}  API:       http://localhost:8000/agent ${NC}"
+echo -e "${GREEN}  Frontend: http://localhost:3000      ${NC}"
+echo -e "${GREEN}  API:      http://localhost:8000      ${NC}"
 if [ "$LOGGING_STARTED" = true ]; then
-echo -e "${GREEN}  Grafana:   http://localhost:3001     ${NC}"
-echo -e "${GREEN}  Loki:      http://localhost:3100     ${NC}"
+echo -e "${GREEN}  Grafana:  http://localhost:3001      ${NC}"
+echo -e "${GREEN}  Loki:     http://localhost:3100      ${NC}"
 fi
 echo -e "${GREEN}========================================${NC}"
 echo ""

@@ -13,7 +13,6 @@ import structlog
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 
 from src.agents.orchestrator import orchestrator_agent
 from src.agents.product_research import product_research_agent
@@ -135,54 +134,57 @@ async def startup_event():
 trace_store = TraceStore()
 set_trace_store(trace_store)
 
-# Serve Next.js static export in production
-# Must be after API routes so API endpoints take priority
-frontend_path = Path(__file__).parent.parent / "frontend" / "out"
-if frontend_path.exists():
-    from fastapi.responses import FileResponse
+# Reverse proxy to Next.js frontend (runs on port 3000)
+# This allows FastAPI to serve both API and frontend from a single port
+import httpx
+from starlette.requests import Request
+from starlette.responses import StreamingResponse, Response
 
-    @app.get("/")
-    async def serve_home():
-        """Serve the landing page."""
-        return FileResponse(frontend_path / "index.html")
+NEXTJS_URL = "http://localhost:3000"
 
-    @app.get("/dashboard")
-    @app.get("/dashboard/")
-    async def serve_dashboard():
-        """Serve the dashboard page."""
-        return FileResponse(frontend_path / "dashboard" / "index.html")
+@app.api_route("/{path:path}", methods=["GET", "HEAD"])
+async def proxy_to_nextjs(request: Request, path: str):
+    """Proxy non-API requests to Next.js server."""
+    # Don't proxy API routes (they're handled by routers above)
+    if path.startswith(("agent", "traces", "sellers", "analytics", "geo", "shopping", "logs", "criteria", "health", "debug")):
+        # This shouldn't happen since routers are registered first, but just in case
+        return Response(status_code=404)
 
-    @app.get("/sellers")
-    @app.get("/sellers/")
-    async def serve_sellers_page():
-        """Serve the sellers page."""
-        return FileResponse(frontend_path / "sellers" / "index.html")
+    # Build the target URL
+    target_url = f"{NEXTJS_URL}/{path}"
+    if request.query_params:
+        target_url += f"?{request.query_params}"
 
-    @app.get("/criteria")
-    @app.get("/criteria/")
-    async def serve_criteria_page():
-        """Serve the criteria management page."""
-        return FileResponse(frontend_path / "criteria" / "index.html")
+    try:
+        async with httpx.AsyncClient() as client:
+            # Forward the request to Next.js
+            response = await client.request(
+                method=request.method,
+                url=target_url,
+                headers={k: v for k, v in request.headers.items() if k.lower() not in ("host", "content-length")},
+                timeout=30.0,
+            )
 
-    # Serve static assets (JS, CSS, images)
-    app.mount("/_next", StaticFiles(directory=frontend_path / "_next"), name="next_assets")
+            # Stream the response back
+            return Response(
+                content=response.content,
+                status_code=response.status_code,
+                headers={k: v for k, v in response.headers.items() if k.lower() not in ("content-encoding", "transfer-encoding", "content-length")},
+                media_type=response.headers.get("content-type"),
+            )
+    except httpx.ConnectError:
+        # Next.js not running - return a helpful error
+        return Response(
+            content="Frontend server not running. Start Next.js with: cd frontend && npm run start",
+            status_code=503,
+            media_type="text/plain",
+        )
 
-    # Catch-all for other static files
-    @app.get("/{path:path}")
-    async def serve_static(path: str):
-        """Serve static files or fallback to 404."""
-        file_path = frontend_path / path
-        if file_path.exists() and file_path.is_file():
-            return FileResponse(file_path)
-        # Try with index.html for directory routes
-        index_path = file_path / "index.html"
-        if index_path.exists():
-            return FileResponse(index_path)
-        # Return 404 page
-        not_found = frontend_path / "404.html"
-        if not_found.exists():
-            return FileResponse(not_found, status_code=404)
-        return FileResponse(frontend_path / "index.html")
+# Also proxy the root path
+@app.get("/")
+async def proxy_root(request: Request):
+    """Proxy root to Next.js."""
+    return await proxy_to_nextjs(request, "")
 
 
 class NegotiationRunner:

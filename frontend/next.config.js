@@ -1,15 +1,14 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'export',
+  // Server mode - no static export
   trailingSlash: true,
   images: {
     unoptimized: true,
   },
   env: {
-    // In production (static export served by FastAPI), use relative URLs
-    // In development, use localhost:8000
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || '',
-    NEXT_PUBLIC_WS_URL: process.env.NEXT_PUBLIC_WS_URL || '',
+    // API URL for backend - in production both run on same host
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000',
+    NEXT_PUBLIC_WS_URL: process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000',
   },
   // Prevent Watchpack from scanning directories outside the project
   webpack: (config) => {
