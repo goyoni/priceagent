@@ -103,8 +103,9 @@ class SellerDraftRequest(BaseModel):
 
     seller_name: str
     phone_number: str
-    product_name: str
-    listed_price: float
+    products: list[str] = []  # List of product names/model numbers
+    product_name: str = ""  # Legacy single product (for backwards compatibility)
+    listed_price: float = 0
     currency: str = "ILS"
     competitor_price: Optional[float] = None
 
@@ -113,7 +114,8 @@ class GenerateDraftsRequest(BaseModel):
     """Request to generate negotiation drafts."""
 
     sellers: list[SellerDraftRequest]
-    language: str = "he"
+    language: str = "he"  # Language override (he/en)
+    country: str = "IL"  # Country for auto-detecting language
 
 
 class DraftMessage(BaseModel):
@@ -121,7 +123,8 @@ class DraftMessage(BaseModel):
 
     seller_name: str
     phone_number: str
-    product_name: str
+    product_name: str  # Legacy field for display
+    products: list[str] = []  # List of products in this message
     message: str
     wa_link: str
 
@@ -132,18 +135,87 @@ class GenerateDraftsResponse(BaseModel):
     drafts: list[DraftMessage]
 
 
+# Country to language mapping
+COUNTRY_LANGUAGES = {
+    "IL": "he",  # Israel -> Hebrew
+    "US": "en",
+    "UK": "en",
+    "GB": "en",
+}
+
+
+def generate_message(products: list[str], language: str) -> str:
+    """Generate a polite negotiation message in the specified language.
+
+    Args:
+        products: List of product names/model numbers
+        language: Language code (he/en)
+
+    Returns:
+        Formatted message string
+    """
+    if language == "he":
+        if len(products) == 1:
+            return f"""שלום,
+ראיתי את המוצר הבא באתר שלכם ורציתי לשאול האם יש אפשרות להנחה:
+
+• {products[0]}
+
+תודה רבה!"""
+        else:
+            products_list = "\n".join(f"• {p}" for p in products)
+            return f"""שלום,
+ראיתי את המוצרים הבאים באתר שלכם ורציתי לשאול האם יש הנחה לרכישה של כולם יחד:
+
+{products_list}
+
+תודה רבה!"""
+    else:
+        if len(products) == 1:
+            return f"""Hi,
+I saw the following item on your website and was wondering if there's a discount available:
+
+• {products[0]}
+
+Thank you!"""
+        else:
+            products_list = "\n".join(f"• {p}" for p in products)
+            return f"""Hi,
+I saw the following items on your website and was wondering if there's a discount for purchasing all of them together:
+
+{products_list}
+
+Thank you!"""
+
+
 @router.post("/generate-drafts")
 async def generate_negotiation_drafts(
     request: GenerateDraftsRequest,
 ) -> GenerateDraftsResponse:
     """Generate editable negotiation message drafts for sellers."""
+    # Determine language: explicit language takes precedence, then country-based, then default
+    if request.language and request.language != "he":
+        # Explicit language override (except default 'he' which means "use country")
+        language = request.language
+    elif request.country and request.country in COUNTRY_LANGUAGES:
+        # Country-based language detection
+        language = COUNTRY_LANGUAGES[request.country]
+    else:
+        # Default to Hebrew
+        language = "he"
+
     drafts = []
     for seller in request.sellers:
-        # Generate message based on language
-        if request.language == "he":
-            message = f"שלום, אני מתעניין ב{seller.product_name}. האם יש אפשרות להנחה?"
-        else:
-            message = f"Hi, I'm interested in {seller.product_name}. Is there any flexibility on the price?"
+        # Get products list - use products array if provided, else fall back to product_name
+        products = seller.products if seller.products else (
+            [seller.product_name] if seller.product_name else []
+        )
+
+        if not products:
+            continue
+
+        # Generate polite message with product list
+        message = generate_message(products, language)
 
         # Generate wa.me link with pre-filled message
         phone_clean = seller.phone_number.replace("+", "").replace(" ", "").replace("-", "")
@@ -153,7 +225,8 @@ async def generate_negotiation_drafts(
             DraftMessage(
                 seller_name=seller.seller_name,
                 phone_number=seller.phone_number,
-                product_name=seller.product_name,
+                product_name=products[0] if products else "",  # Legacy field
+                products=products,
                 message=message,
                 wa_link=wa_link,
             )

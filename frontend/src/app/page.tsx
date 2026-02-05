@@ -112,7 +112,8 @@ interface SelectedSeller {
   name: string;
   phone: string;
   price?: number;
-  productName?: string;
+  productName?: string;  // Legacy single product
+  products?: string[];  // List of products (for bundles)
 }
 
 // Wrapper component with Suspense for useSearchParams
@@ -980,18 +981,22 @@ function SearchPageContent() {
     const sellersForDrafts = selectedSellers.map(seller => ({
       seller_name: seller.name,
       phone_number: seller.phone,
-      product_name: seller.productName || query,
+      // Use products array if available, otherwise fall back to productName
+      products: seller.products || (seller.productName ? [seller.productName] : [query]),
       listed_price: seller.price || 0,
     }));
 
-    // Generate drafts and open modal for editing before sending
-    generateDrafts(sellersForDrafts);
+    // Generate drafts with country for language detection
+    generateDrafts(sellersForDrafts, country);
   };
 
   const handleContact = (seller: string, phone: string) => {
     trackSellerContact(seller, 'whatsapp', query);
     const cleanPhone = phone.replace(/[^0-9+]/g, '');
-    const message = encodeURIComponent(`Hi, I'm interested in ${query}. What's your best price?`);
+    // Use Hebrew for IL, English otherwise
+    const message = country === 'IL'
+      ? encodeURIComponent(`שלום,\nראיתי את המוצר הבא באתר שלכם ורציתי לשאול האם יש אפשרות להנחה:\n\n• ${query}\n\nתודה רבה!`)
+      : encodeURIComponent(`Hi,\nI saw the following item on your website and was wondering if there's a discount available:\n\n• ${query}\n\nThank you!`);
     window.open(`https://wa.me/${cleanPhone}?text=${message}`, '_blank');
   };
 

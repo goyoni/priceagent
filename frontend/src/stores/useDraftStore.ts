@@ -28,10 +28,11 @@ interface DraftState {
     sellers: Array<{
       seller_name: string;
       phone_number: string;
-      product_name: string;
-      listed_price: number;
+      products?: string[];  // List of products (preferred)
+      product_name?: string;  // Legacy single product
+      listed_price?: number;
     }>,
-    language?: string
+    country?: string  // Country for language detection (IL -> Hebrew)
   ) => Promise<void>;
 }
 
@@ -93,12 +94,12 @@ export const useDraftStore = create<DraftState>((set, get) => ({
     }),
 
   // Async actions
-  generateDrafts: async (sellers, language = 'he') => {
+  generateDrafts: async (sellers, country = 'IL') => {
     set({ isGenerating: true, error: null });
     try {
       const response = await api.generateDrafts({
         sellers,
-        language,
+        country,
       });
       set({
         drafts: response.drafts,

@@ -126,7 +126,8 @@ export interface BundleResult {
 export interface DraftMessage {
   seller_name: string;
   phone_number: string;
-  product_name: string;
+  product_name: string;  // Legacy single product
+  products?: string[];  // List of products in the message
   message: string;
   wa_link: string;
 }
@@ -135,11 +136,13 @@ export interface GenerateDraftsRequest {
   sellers: Array<{
     seller_name: string;
     phone_number: string;
-    product_name: string;
-    listed_price: number;
+    products?: string[];  // List of products (preferred)
+    product_name?: string;  // Legacy single product
+    listed_price?: number;
     currency?: string;
   }>;
-  language?: string;
+  country?: string;  // Country for auto-detecting language (IL -> Hebrew)
+  language?: string;  // Language override (he/en)
 }
 
 export interface GenerateDraftsResponse {

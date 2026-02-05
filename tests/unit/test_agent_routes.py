@@ -177,3 +177,112 @@ class TestGenerateDrafts:
         draft = response.json()["drafts"][0]
         # Should contain Hebrew greeting (default)
         assert "שלום" in draft["message"]
+
+    def test_generate_drafts_country_based_language(self, client):
+        """Should use Hebrew for IL country."""
+        request_data = {
+            "sellers": [
+                {
+                    "seller_name": "Test Store",
+                    "phone_number": "+972501234567",
+                    "product_name": "iPhone 15",
+                }
+            ],
+            "country": "IL",
+        }
+
+        response = client.post("/agent/generate-drafts", json=request_data)
+
+        assert response.status_code == 200
+        draft = response.json()["drafts"][0]
+        assert "שלום" in draft["message"]
+        assert "תודה רבה" in draft["message"]
+
+    def test_generate_drafts_country_us_english(self, client):
+        """Should use English for US country."""
+        request_data = {
+            "sellers": [
+                {
+                    "seller_name": "Test Store",
+                    "phone_number": "+1555123456",
+                    "product_name": "iPhone 15",
+                }
+            ],
+            "country": "US",
+        }
+
+        response = client.post("/agent/generate-drafts", json=request_data)
+
+        assert response.status_code == 200
+        draft = response.json()["drafts"][0]
+        assert "Hi" in draft["message"]
+        assert "Thank you" in draft["message"]
+
+    def test_generate_drafts_multiple_products(self, client):
+        """Should list multiple products in the message."""
+        request_data = {
+            "sellers": [
+                {
+                    "seller_name": "Test Store",
+                    "phone_number": "+972501234567",
+                    "products": ["Samsung Fridge", "Samsung Washer", "Samsung Dryer"],
+                }
+            ],
+            "country": "IL",
+        }
+
+        response = client.post("/agent/generate-drafts", json=request_data)
+
+        assert response.status_code == 200
+        draft = response.json()["drafts"][0]
+        # Should mention all products
+        assert "Samsung Fridge" in draft["message"]
+        assert "Samsung Washer" in draft["message"]
+        assert "Samsung Dryer" in draft["message"]
+        # Should mention bundle discount
+        assert "כולם יחד" in draft["message"]  # "all of them together"
+        # Should return products array
+        assert draft["products"] == ["Samsung Fridge", "Samsung Washer", "Samsung Dryer"]
+
+    def test_generate_drafts_single_product_no_bundle_text(self, client):
+        """Should not mention bundle discount for single product."""
+        request_data = {
+            "sellers": [
+                {
+                    "seller_name": "Test Store",
+                    "phone_number": "+972501234567",
+                    "products": ["iPhone 15"],
+                }
+            ],
+            "country": "IL",
+        }
+
+        response = client.post("/agent/generate-drafts", json=request_data)
+
+        assert response.status_code == 200
+        draft = response.json()["drafts"][0]
+        assert "iPhone 15" in draft["message"]
+        # Should NOT mention bundle purchase
+        assert "כולם יחד" not in draft["message"]
+
+    def test_generate_drafts_products_array_takes_precedence(self, client):
+        """Products array should take precedence over product_name."""
+        request_data = {
+            "sellers": [
+                {
+                    "seller_name": "Test Store",
+                    "phone_number": "+972501234567",
+                    "products": ["Product A", "Product B"],
+                    "product_name": "Legacy Product",  # Should be ignored
+                }
+            ],
+            "country": "IL",
+        }
+
+        response = client.post("/agent/generate-drafts", json=request_data)
+
+        assert response.status_code == 200
+        draft = response.json()["drafts"][0]
+        assert "Product A" in draft["message"]
+        assert "Product B" in draft["message"]
+        assert "Legacy Product" not in draft["message"]
