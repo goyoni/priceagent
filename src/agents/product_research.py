@@ -3,6 +3,7 @@
 import asyncio
 from agents import Agent, function_tool
 from typing import Optional
+from urllib.parse import urlparse
 
 # Import from scraping module to ensure scrapers are registered
 from src.tools.scraping import ScraperRegistry
@@ -15,6 +16,72 @@ from src.observability import report_progress, record_search, record_error, reco
 
 # List of aggregator scraper names (prioritized for appliance/electronics searches)
 AGGREGATOR_SCRAPERS = ["zap_http", "wisebuy"]
+
+
+async def enrich_results_with_db_contacts(results: list[PriceOption]) -> list[PriceOption]:
+    """Enrich search results with contact info from the database.
+
+    Looks up each seller by domain and populates whatsapp_number if found in DB.
+
+    Args:
+        results: List of PriceOption objects from scraping
+
+    Returns:
+        Same list with contact info populated from database
+    """
+    import structlog
+    from src.db.session import get_db_session
+    from src.db.repository.sellers import SellerRepository
+
+    logger = structlog.get_logger()
+
+    if not results:
+        return results
+
+    try:
+        async with get_db_session() as session:
+            repo = SellerRepository(session)
+
+            enriched_count = 0
+            for result in results:
+                # Skip if already has contact
+                if result.seller.whatsapp_number:
+                    continue
+
+                # Get domain from seller website or result URL
+                url = result.seller.website or result.url
+                if not url:
+                    continue
+
+                try:
+                    parsed = urlparse(url)
+                    domain = parsed.netloc.lower()
+                    if domain.startswith("www."):
+                        domain = domain[4:]
+
+                    # Skip aggregator domains - we want the actual seller's contact
+                    if domain in ("zap.co.il", "wisebuy.co.il", "google.com", "google.co.il"):
+                        continue
+
+                    # Look up contact in database
+                    contact = await repo.get_contact_by_domain(domain)
+                    if contact:
+                        result.seller.whatsapp_number = contact
+                        enriched_count += 1
+                except Exception:
+                    pass  # Skip individual failures silently
+
+            if enriched_count > 0:
+                logger.info(
+                    "Enriched results with database contacts",
+                    total_results=len(results),
+                    enriched=enriched_count,
+                )
+
+    except Exception as e:
+        logger.warning("Failed to enrich contacts from database", error=str(e))
+
+    return results
 
 
 async def _search_products_impl(query: str, country: str = "IL", max_results: int = 10) -> str:
@@ -81,6 +148,9 @@ async def _search_products_impl(query: str, country: str = "IL", max_results: in
 
     # Deduplicate results by seller + price bucket
     all_results = deduplicate_results(all_results)
+
+    # Enrich results with database contact info
+    all_results = await enrich_results_with_db_contacts(all_results)
 
     # Rank results by combined score (price and reputation)
     def rank_score(result: PriceOption) -> float:
@@ -264,8 +334,9 @@ async def _search_multiple_products_impl(
                     error=str(e),
                 )
 
-        # After all scrapers complete for this query, deduplicate
-        results_by_query[query] = deduplicate_results(all_results)
+        # After all scrapers complete for this query, deduplicate and enrich
+        deduplicated = deduplicate_results(all_results)
+        results_by_query[query] = await enrich_results_with_db_contacts(deduplicated)
 
         await report_progress(
             f"📊 {query} complete",
@@ -419,11 +490,17 @@ async def _search_multiple_products_impl(
                                 # Price is reasonable - add to results
                                 from datetime import datetime
 
+                                # Preserve contact from original seller
+                                original_contact = None
+                                if agg.products:
+                                    original_contact = agg.products[0].seller.whatsapp_number or agg.contact
+
                                 new_result = PriceOption(
                                     product_id=missing_query,
                                     seller=SellerInfo(
                                         name=agg.seller_name,
                                         website=result_url,
+                                        whatsapp_number=original_contact,
                                         country="IL",
                                         source="site_search",
                                     ),
@@ -648,8 +725,9 @@ async def _search_aggregators_impl(
             return f"No products found on aggregator sites for '{query}'. Errors: {'; '.join(errors)}"
         return f"No products found on aggregator sites for '{query}'"
 
-    # Deduplicate results
+    # Deduplicate results and enrich with database contacts
     all_results = deduplicate_results(all_results)
+    all_results = await enrich_results_with_db_contacts(all_results)
 
     # Sort by price (ascending), with rating as tiebreaker
     def sort_key(result: PriceOption) -> tuple:
