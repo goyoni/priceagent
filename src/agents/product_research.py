@@ -17,138 +17,186 @@ from src.observability import report_progress, record_search, record_error, reco
 # List of aggregator scraper names (prioritized for appliance/electronics searches)
 AGGREGATOR_SCRAPERS = ["zap_http", "wisebuy"]
 
+# Domains to skip (aggregators, not actual sellers)
+AGGREGATOR_DOMAINS = ("zap.co.il", "wisebuy.co.il", "google.com", "google.co.il")
 
-async def enrich_results_with_db_contacts(results: list[PriceOption]) -> list[PriceOption]:
-    """Enrich search results with contact info from the database.
 
-    Looks up each seller by domain and populates whatsapp_number if found in DB.
+async def get_seller_contact_from_db_or_scrape(
+    seller_url: str,
+    seller_name: str,
+    country: str = "IL",
+    rating: Optional[float] = None,
+) -> Optional[str]:
+    """Get contact info for a seller: check DB first, scrape if needed, save result.
+
+    This is the unified contact resolution function that:
+    1. Checks the database for cached contact info
+    2. If not found, scrapes the seller's website
+    3. Saves the result to the database for future lookups
 
     Args:
-        results: List of PriceOption objects from scraping
+        seller_url: URL of the seller's website
+        seller_name: Name of the seller
+        country: Country code for selecting appropriate scraper
+        rating: Optional seller rating to save
 
     Returns:
-        Same list with contact info populated from database
+        Contact phone number if found, None otherwise
     """
     import structlog
     from src.db.session import get_db_session
     from src.db.repository.sellers import SellerRepository
 
+    logger = structlog.get_logger()
+
+    if not seller_url:
+        return None
+
+    # Parse domain
+    try:
+        parsed = urlparse(seller_url)
+        domain = parsed.netloc.lower()
+        if domain.startswith("www."):
+            domain = domain[4:]
+    except Exception:
+        return None
+
+    # Skip aggregator domains
+    if domain in AGGREGATOR_DOMAINS:
+        return None
+
+    contact = None
+
+    # Step 1: Check database first
+    try:
+        async with get_db_session() as session:
+            repo = SellerRepository(session)
+            contact = await repo.get_contact_by_domain(domain)
+            if contact:
+                logger.debug("Found contact in database", domain=domain, contact=contact)
+                return contact
+    except Exception as e:
+        logger.debug("Failed to check contact in database", error=str(e))
+
+    # Step 2: Scrape if not in database
+    scrapers = ScraperRegistry.get_scrapers_for_country(country)
+    for scraper in scrapers:
+        try:
+            contact = await scraper.extract_contact_info(seller_url)
+            if contact:
+                logger.info("Scraped contact info", seller=seller_name, contact=contact)
+                break
+        except Exception:
+            continue
+
+    # Step 3: Save to database (whether we found contact or not - saves the seller)
+    try:
+        async with get_db_session() as session:
+            repo = SellerRepository(session)
+            await repo.create_or_update(
+                seller_name=seller_name,
+                website_url=seller_url,
+                whatsapp_number=contact,
+                rating=rating,
+            )
+            await session.commit()
+            logger.debug("Saved seller to database", seller=seller_name, has_contact=bool(contact))
+    except Exception as e:
+        logger.debug("Failed to save seller to database", error=str(e))
+
+    return contact
+
+
+async def enrich_and_save_sellers(
+    results: list[PriceOption],
+    country: str = "IL",
+    max_to_scrape: int = 10,
+) -> list[PriceOption]:
+    """Enrich results with contact info and save sellers to database.
+
+    For each seller:
+    1. If already has contact, just save to DB
+    2. If no contact, check DB first, then scrape if needed
+    3. Save all sellers to DB for future lookups
+
+    Args:
+        results: List of PriceOption objects from scraping
+        country: Country code for selecting scrapers
+        max_to_scrape: Maximum sellers to scrape (avoid slow searches)
+
+    Returns:
+        Same list with contact info populated where possible
+    """
+    import structlog
     logger = structlog.get_logger()
 
     if not results:
         return results
 
-    try:
-        async with get_db_session() as session:
-            repo = SellerRepository(session)
+    # Track how many we've scraped
+    scraped_count = 0
+    enriched_count = 0
 
-            enriched_count = 0
-            for result in results:
-                # Skip if already has contact
-                if result.seller.whatsapp_number:
-                    continue
+    # Report progress for sellers that need contact scraping
+    missing_contact = [
+        r for r in results
+        if not r.seller.whatsapp_number and r.seller.website
+    ]
+    if missing_contact:
+        await report_progress(
+            "📞 Looking up contacts",
+            f"Checking {min(len(missing_contact), max_to_scrape)} sellers..."
+        )
 
-                # Get domain from seller website or result URL
-                url = result.seller.website or result.url
-                if not url:
-                    continue
+    for result in results:
+        seller_url = result.seller.website or result.url
+        if not seller_url or not result.seller.name:
+            continue
 
-                try:
-                    parsed = urlparse(url)
-                    domain = parsed.netloc.lower()
-                    if domain.startswith("www."):
-                        domain = domain[4:]
+        # Skip aggregator URLs
+        if any(agg in seller_url for agg in AGGREGATOR_DOMAINS):
+            continue
 
-                    # Skip aggregator domains - we want the actual seller's contact
-                    if domain in ("zap.co.il", "wisebuy.co.il", "google.com", "google.co.il"):
-                        continue
+        # If already has contact, just save to DB
+        if result.seller.whatsapp_number:
+            try:
+                from src.db.session import get_db_session
+                from src.db.repository.sellers import SellerRepository
 
-                    # Look up contact in database
-                    contact = await repo.get_contact_by_domain(domain)
-                    if contact:
-                        result.seller.whatsapp_number = contact
-                        enriched_count += 1
-                except Exception:
-                    pass  # Skip individual failures silently
-
-            if enriched_count > 0:
-                logger.info(
-                    "Enriched results with database contacts",
-                    total_results=len(results),
-                    enriched=enriched_count,
-                )
-
-    except Exception as e:
-        logger.warning("Failed to enrich contacts from database", error=str(e))
-
-    return results
-
-
-async def save_sellers_to_db(results: list[PriceOption]) -> None:
-    """Save discovered sellers to the database for future contact lookups.
-
-    Persists each seller with their website and contact info to the database.
-    Uses create_or_update to avoid duplicates.
-
-    Args:
-        results: List of PriceOption objects with seller info
-    """
-    import structlog
-    from src.db.session import get_db_session
-    from src.db.repository.sellers import SellerRepository
-
-    logger = structlog.get_logger()
-
-    if not results:
-        return
-
-    try:
-        async with get_db_session() as session:
-            repo = SellerRepository(session)
-            saved_count = 0
-
-            for result in results:
-                # Skip if no useful seller info
-                if not result.seller.name:
-                    continue
-
-                # Get domain from seller website or result URL
-                url = result.seller.website or result.url
-                if not url:
-                    continue
-
-                try:
-                    parsed = urlparse(url)
-                    domain = parsed.netloc.lower()
-                    if domain.startswith("www."):
-                        domain = domain[4:]
-
-                    # Skip aggregator domains
-                    if domain in ("zap.co.il", "wisebuy.co.il", "google.com", "google.co.il"):
-                        continue
-
-                    # Save seller (create or update)
+                async with get_db_session() as session:
+                    repo = SellerRepository(session)
                     await repo.create_or_update(
                         seller_name=result.seller.name,
-                        website_url=url,
+                        website_url=seller_url,
                         whatsapp_number=result.seller.whatsapp_number,
                         rating=result.seller.reliability_score,
                     )
-                    saved_count += 1
+                    await session.commit()
+            except Exception:
+                pass
+            continue
 
-                except Exception:
-                    pass  # Skip individual failures
+        # No contact - use unified function to check DB, scrape if needed, and save
+        if scraped_count < max_to_scrape:
+            contact = await get_seller_contact_from_db_or_scrape(
+                seller_url=seller_url,
+                seller_name=result.seller.name,
+                country=country,
+                rating=result.seller.reliability_score,
+            )
+            if contact:
+                result.seller.whatsapp_number = contact
+                enriched_count += 1
+            scraped_count += 1
 
-            await session.commit()
+    if enriched_count > 0:
+        await report_progress(
+            "✅ Contacts found",
+            f"Found contact info for {enriched_count} sellers"
+        )
+        logger.info("Enriched seller contacts", enriched=enriched_count, scraped=scraped_count)
 
-            if saved_count > 0:
-                logger.info(
-                    "Saved sellers to database",
-                    saved=saved_count,
-                )
-
-    except Exception as e:
-        logger.warning("Failed to save sellers to database", error=str(e))
+    return results
 
 
 async def _search_products_impl(query: str, country: str = "IL", max_results: int = 10) -> str:
@@ -216,11 +264,8 @@ async def _search_products_impl(query: str, country: str = "IL", max_results: in
     # Deduplicate results by seller + price bucket
     all_results = deduplicate_results(all_results)
 
-    # Enrich results with database contact info
-    all_results = await enrich_results_with_db_contacts(all_results)
-
-    # Save discovered sellers to database for future lookups
-    await save_sellers_to_db(all_results)
+    # Enrich with contacts (DB lookup or scrape) and save sellers to database
+    all_results = await enrich_and_save_sellers(all_results, country)
 
     # Rank results by combined score (price and reputation)
     def rank_score(result: PriceOption) -> float:
@@ -284,6 +329,8 @@ search_products = function_tool(_search_products_cached, name_override="search_p
 async def _get_seller_contact_impl(seller_url: str, country: str = "IL") -> str:
     """Get contact information for a seller from their website.
 
+    Checks DB first, scrapes if needed, saves result for future lookups.
+
     Args:
         seller_url: URL of the seller's page or website
         country: Country code for selecting appropriate scraper
@@ -291,15 +338,26 @@ async def _get_seller_contact_impl(seller_url: str, country: str = "IL") -> str:
     Returns:
         Contact information including phone/WhatsApp if found
     """
-    scrapers = ScraperRegistry.get_scrapers_for_country(country)
+    from urllib.parse import urlparse
 
-    for scraper in scrapers:
-        try:
-            phone = await scraper.extract_contact_info(seller_url)
-            if phone:
-                return f"Found contact: {phone}"
-        except Exception:
-            continue
+    # Extract seller name from URL for saving
+    try:
+        parsed = urlparse(seller_url)
+        domain = parsed.netloc.lower()
+        if domain.startswith("www."):
+            domain = domain[4:]
+        seller_name = domain.split(".")[0].title()  # e.g., "example.com" -> "Example"
+    except Exception:
+        seller_name = "Unknown"
+
+    contact = await get_seller_contact_from_db_or_scrape(
+        seller_url=seller_url,
+        seller_name=seller_name,
+        country=country,
+    )
+
+    if contact:
+        return f"Found contact: {contact}"
 
     return "No contact information found. Please provide manually."
 
@@ -406,11 +464,8 @@ async def _search_multiple_products_impl(
 
         # After all scrapers complete for this query, deduplicate and enrich
         deduplicated = deduplicate_results(all_results)
-        enriched = await enrich_results_with_db_contacts(deduplicated)
+        enriched = await enrich_and_save_sellers(deduplicated, country)
         results_by_query[query] = enriched
-
-        # Save discovered sellers to database
-        await save_sellers_to_db(enriched)
 
         await report_progress(
             f"📊 {query} complete",
@@ -799,12 +854,9 @@ async def _search_aggregators_impl(
             return f"No products found on aggregator sites for '{query}'. Errors: {'; '.join(errors)}"
         return f"No products found on aggregator sites for '{query}'"
 
-    # Deduplicate results and enrich with database contacts
+    # Deduplicate results and enrich with contacts (DB lookup or scrape) and save
     all_results = deduplicate_results(all_results)
-    all_results = await enrich_results_with_db_contacts(all_results)
-
-    # Save discovered sellers to database for future lookups
-    await save_sellers_to_db(all_results)
+    all_results = await enrich_and_save_sellers(all_results, country)
 
     # Sort by price (ascending), with rating as tiebreaker
     def sort_key(result: PriceOption) -> tuple:
