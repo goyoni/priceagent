@@ -240,7 +240,7 @@ class TestGenerateDrafts:
         assert "Samsung Washer" in draft["message"]
         assert "Samsung Dryer" in draft["message"]
         # Should mention bundle discount
-        assert "כולם יחד" in draft["message"]  # "all of them together"
+        assert "במרוכז" in draft["message"]  # "in bulk"
         # Should return products array
         assert draft["products"] == ["Samsung Fridge", "Samsung Washer", "Samsung Dryer"]
 
@@ -286,3 +286,30 @@ class TestGenerateDrafts:
         assert "Product A" in draft["message"]
         assert "Product B" in draft["message"]
         assert "Legacy Product" not in draft["message"]
+
+    def test_generate_drafts_comma_separated_products_split(self, client):
+        """Comma-separated products string should be split into individual products."""
+        request_data = {
+            "sellers": [
+                {
+                    "seller_name": "Test Store",
+                    "phone_number": "+972501234567",
+                    # Products passed as comma-separated string (common from multi-product search)
+                    "products": ["BFL523MB1F, HBG578EB3, PVS631HC1E"],
+                }
+            ],
+            "country": "IL",
+        }
+
+        response = client.post("/agent/generate-drafts", json=request_data)
+
+        assert response.status_code == 200
+        draft = response.json()["drafts"][0]
+        # Should be split into separate bullet points
+        assert "• BFL523MB1F" in draft["message"]
+        assert "• HBG578EB3" in draft["message"]
+        assert "• PVS631HC1E" in draft["message"]
+        # Should use plural form (multiple products)
+        assert "המוצרים הבאים" in draft["message"]
+        # Should mention bulk purchase discount
+        assert "במרוכז" in draft["message"]

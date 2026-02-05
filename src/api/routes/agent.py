@@ -165,7 +165,7 @@ def generate_message(products: list[str], language: str) -> str:
         else:
             products_list = "\n".join(f"• {p}" for p in products)
             return f"""שלום,
-ראיתי את המוצרים הבאים באתר שלכם ורציתי לשאול האם יש הנחה לרכישה של כולם יחד:
+ראיתי את המוצרים הבאים באתר שלכם ורציתי לשאול האם יש אפשרות להנחה במידה ואקנה אצלכם במרוכז:
 
 {products_list}
 
@@ -186,6 +186,27 @@ I saw the following items on your website and was wondering if there's a discoun
 {products_list}
 
 Thank you!"""
+
+
+def normalize_products(products: list[str]) -> list[str]:
+    """Normalize products list - split comma-separated strings into individual products.
+
+    Args:
+        products: List that may contain comma-separated product strings
+
+    Returns:
+        Flattened list with individual product names
+    """
+    result = []
+    for p in products:
+        # If a product contains commas, it might be a comma-separated list
+        if "," in p:
+            # Split and strip whitespace
+            parts = [part.strip() for part in p.split(",") if part.strip()]
+            result.extend(parts)
+        else:
+            result.append(p.strip())
+    return result
 
 
 @router.post("/generate-drafts")
@@ -213,6 +234,9 @@ async def generate_negotiation_drafts(
 
         if not products:
             continue
+
+        # Normalize products - split comma-separated strings into individual products
+        products = normalize_products(products)
 
         # Generate polite message with product list
         message = generate_message(products, language)
