@@ -111,6 +111,10 @@ if [ "$DEV_MODE" = false ]; then
     # Clear .next cache to prevent corruption issues
     rm -rf .next
 
+    # For local builds, explicitly set API URLs (npm run build sets NODE_ENV=production)
+    export NEXT_PUBLIC_API_URL="http://localhost:8000"
+    export NEXT_PUBLIC_WS_URL="ws://localhost:8000"
+
     if npm run build; then
         echo -e "${GREEN}✓${NC} Next.js built successfully"
     else
