@@ -1420,7 +1420,7 @@ function SearchPageContent() {
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search for products (e.g., Samsung refrigerator RF72DG9620B1)"
+                placeholder="Search for specific model/s (e.g., RF72DG9620B1, HBG634BS1)"
                 className="w-full px-4 md:px-6 py-3 md:py-4 text-base md:text-lg bg-white shadow-soft border border-gray-200 rounded-xl md:rounded-2xl
                          text-gray-800 placeholder-gray-400 outline-none
                          focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100
@@ -1445,7 +1445,7 @@ function SearchPageContent() {
                     Searching...
                   </span>
                 ) : (
-                  'Search'
+                  'Find Prices'
                 )}
               </button>
             </div>
