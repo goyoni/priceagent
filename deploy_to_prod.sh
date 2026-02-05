@@ -65,6 +65,19 @@ if ! python -m pytest tests/ -v --tb=short; then
 fi
 echo -e "${GREEN}✓${NC} All tests passed"
 
+# Verify frontend builds (but don't commit - built at deploy time on Railway)
+echo ""
+echo -e "${YELLOW}Verifying frontend builds...${NC}"
+cd "$PROJECT_DIR/frontend"
+if npm run build; then
+    echo -e "${GREEN}✓${NC} Frontend build verified"
+else
+    echo -e "${RED}✗${NC} Frontend build failed"
+    echo -e "${RED}Deployment aborted. Fix build errors before deploying.${NC}"
+    exit 1
+fi
+cd "$PROJECT_DIR"
+
 # Get version
 if [ -n "$1" ]; then
     VERSION="$1"
@@ -88,26 +101,6 @@ fi
 echo ""
 echo -e "${YELLOW}Deploying version: ${VERSION}${NC}"
 
-# Build frontend before merge (ensures frontend/out is up to date)
-echo ""
-echo -e "${YELLOW}Building frontend...${NC}"
-cd "$PROJECT_DIR/frontend"
-if npm run build; then
-    echo -e "${GREEN}✓${NC} Frontend built"
-else
-    echo -e "${RED}✗${NC} Frontend build failed"
-    echo -e "${RED}Deployment aborted. Fix build errors before deploying.${NC}"
-    exit 1
-fi
-cd "$PROJECT_DIR"
-
-# Commit frontend build if there are changes
-if ! git diff --quiet frontend/out/; then
-    echo -e "${YELLOW}Committing frontend build...${NC}"
-    git add frontend/out/
-    git commit -m "chore: Rebuild frontend for ${VERSION}"
-fi
-
 # Switch to main and merge
 echo ""
 echo -e "${YELLOW}Switching to main branch...${NC}"
@@ -117,19 +110,13 @@ echo -e "${YELLOW}Pulling latest main...${NC}"
 git pull origin main
 
 echo -e "${YELLOW}Merging development into main...${NC}"
-# Use -X theirs for frontend/out to avoid build hash conflicts
 if ! git merge development -m "Release ${VERSION}: Merge development into main"; then
-    echo -e "${YELLOW}Merge conflict detected, resolving frontend/out conflicts...${NC}"
-    # Accept development's version for all frontend/out conflicts
-    git checkout --theirs frontend/out/ 2>/dev/null || true
-    git add frontend/out/
-    # Clean up any deleted files that conflict
-    git diff --name-only --diff-filter=U | while read file; do
-        if [[ "$file" == frontend/out/* ]]; then
-            git add "$file" 2>/dev/null || git rm "$file" 2>/dev/null || true
-        fi
-    done
-    git commit -m "Release ${VERSION}: Merge development into main"
+    echo -e "${RED}✗${NC} Merge conflict detected!"
+    echo "Please resolve conflicts manually, then run:"
+    echo "  git commit"
+    echo "  git tag -a ${VERSION} -m \"Release ${VERSION}\""
+    echo "  git push origin main ${VERSION}"
+    exit 1
 fi
 
 # Tag the release
@@ -149,9 +136,11 @@ echo -e "${GREEN}  Version: ${VERSION}                  ${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
 echo "Summary:"
-echo "  - Built frontend for production"
+echo "  - Tests passed"
+echo "  - Frontend build verified"
 echo "  - Merged development -> main"
 echo "  - Created tag: ${VERSION}"
 echo ""
-echo "To run production:"
-echo "  ./run.sh"
+echo "Railway will automatically:"
+echo "  - Build the frontend"
+echo "  - Deploy both Next.js and FastAPI"
