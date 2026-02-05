@@ -84,6 +84,73 @@ async def enrich_results_with_db_contacts(results: list[PriceOption]) -> list[Pr
     return results
 
 
+async def save_sellers_to_db(results: list[PriceOption]) -> None:
+    """Save discovered sellers to the database for future contact lookups.
+
+    Persists each seller with their website and contact info to the database.
+    Uses create_or_update to avoid duplicates.
+
+    Args:
+        results: List of PriceOption objects with seller info
+    """
+    import structlog
+    from src.db.session import get_db_session
+    from src.db.repository.sellers import SellerRepository
+
+    logger = structlog.get_logger()
+
+    if not results:
+        return
+
+    try:
+        async with get_db_session() as session:
+            repo = SellerRepository(session)
+            saved_count = 0
+
+            for result in results:
+                # Skip if no useful seller info
+                if not result.seller.name:
+                    continue
+
+                # Get domain from seller website or result URL
+                url = result.seller.website or result.url
+                if not url:
+                    continue
+
+                try:
+                    parsed = urlparse(url)
+                    domain = parsed.netloc.lower()
+                    if domain.startswith("www."):
+                        domain = domain[4:]
+
+                    # Skip aggregator domains
+                    if domain in ("zap.co.il", "wisebuy.co.il", "google.com", "google.co.il"):
+                        continue
+
+                    # Save seller (create or update)
+                    await repo.create_or_update(
+                        seller_name=result.seller.name,
+                        website_url=url,
+                        whatsapp_number=result.seller.whatsapp_number,
+                        rating=result.seller.reliability_score,
+                    )
+                    saved_count += 1
+
+                except Exception:
+                    pass  # Skip individual failures
+
+            await session.commit()
+
+            if saved_count > 0:
+                logger.info(
+                    "Saved sellers to database",
+                    saved=saved_count,
+                )
+
+    except Exception as e:
+        logger.warning("Failed to save sellers to database", error=str(e))
+
+
 async def _search_products_impl(query: str, country: str = "IL", max_results: int = 10) -> str:
     """Search for products across price comparison sites with contact info.
 
@@ -151,6 +218,9 @@ async def _search_products_impl(query: str, country: str = "IL", max_results: in
 
     # Enrich results with database contact info
     all_results = await enrich_results_with_db_contacts(all_results)
+
+    # Save discovered sellers to database for future lookups
+    await save_sellers_to_db(all_results)
 
     # Rank results by combined score (price and reputation)
     def rank_score(result: PriceOption) -> float:
@@ -336,7 +406,11 @@ async def _search_multiple_products_impl(
 
         # After all scrapers complete for this query, deduplicate and enrich
         deduplicated = deduplicate_results(all_results)
-        results_by_query[query] = await enrich_results_with_db_contacts(deduplicated)
+        enriched = await enrich_results_with_db_contacts(deduplicated)
+        results_by_query[query] = enriched
+
+        # Save discovered sellers to database
+        await save_sellers_to_db(enriched)
 
         await report_progress(
             f"📊 {query} complete",
@@ -728,6 +802,9 @@ async def _search_aggregators_impl(
     # Deduplicate results and enrich with database contacts
     all_results = deduplicate_results(all_results)
     all_results = await enrich_results_with_db_contacts(all_results)
+
+    # Save discovered sellers to database for future lookups
+    await save_sellers_to_db(all_results)
 
     # Sort by price (ascending), with rating as tiebreaker
     def sort_key(result: PriceOption) -> tuple:
