@@ -78,12 +78,22 @@ async def start_price_search(request: StartSearchRequest) -> StartSearchResponse
     store = get_trace_store()
     hooks = ObservabilityHooks(store)
 
-    # Build search query
-    product_names = [item.model_number or item.product_name for item in request.items]
-    if len(product_names) == 1:
-        prompt = f"Search for: {product_names[0]}"
+    # Build search query - combine product name and model number for clear identification
+    def build_product_query(item: ShoppingListItemRequest) -> str:
+        """Build a complete product query including both name and model number."""
+        if item.model_number and item.product_name:
+            # If both available, combine them
+            if item.model_number.lower() in item.product_name.lower():
+                # Model number already in product name
+                return item.product_name
+            return f"{item.product_name} {item.model_number}"
+        return item.model_number or item.product_name
+
+    product_queries = [build_product_query(item) for item in request.items]
+    if len(product_queries) == 1:
+        prompt = f"Search for: {product_queries[0]}"
     else:
-        prompt = f"Search for multiple products: {', '.join(product_names)}"
+        prompt = f"Search for multiple products: {', '.join(product_queries)}"
 
     # Start trace
     trace = await hooks.start_trace(input_prompt=prompt)
