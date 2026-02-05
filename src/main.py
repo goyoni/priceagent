@@ -2,7 +2,10 @@
 
 import asyncio
 import json
+import os
+import subprocess
 import threading
+import time
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -13,6 +16,9 @@ import structlog
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+# Global reference to Next.js subprocess
+nextjs_process = None
 
 from src.agents.orchestrator import orchestrator_agent
 from src.agents.product_research import product_research_agent
@@ -111,8 +117,61 @@ async def debug_db():
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize database on application startup."""
+    """Initialize database and start Next.js on application startup."""
+    global nextjs_process
     from src.config.settings import settings
+
+    # Start Next.js subprocess in production
+    if settings.environment == "production":
+        frontend_dir = Path(__file__).parent.parent / "frontend"
+        if not frontend_dir.exists():
+            frontend_dir = Path("/app/frontend")  # Docker path
+
+        logger.info("Starting Next.js subprocess", frontend_dir=str(frontend_dir))
+
+        try:
+            # Set PORT=3000 for Next.js, regardless of Railway's PORT
+            nextjs_env = os.environ.copy()
+            nextjs_env["PORT"] = "3000"
+
+            nextjs_process = subprocess.Popen(
+                ["npm", "run", "start"],
+                cwd=str(frontend_dir),
+                env=nextjs_env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            )
+
+            # Wait for Next.js to be ready (non-blocking check)
+            import httpx
+            for i in range(30):
+                try:
+                    async with httpx.AsyncClient() as client:
+                        response = await client.get("http://localhost:3000", timeout=2.0)
+                        if response.status_code < 500:
+                            logger.info("Next.js started successfully", attempts=i+1)
+                            break
+                except Exception:
+                    pass
+
+                # Check if process died
+                if nextjs_process.poll() is not None:
+                    stdout, _ = nextjs_process.communicate()
+                    logger.error(
+                        "Next.js process died during startup",
+                        return_code=nextjs_process.returncode,
+                        output=stdout.decode() if stdout else None,
+                    )
+                    break
+
+                await asyncio.sleep(1)
+            else:
+                logger.warning("Next.js may not be fully ready after 30 seconds")
+
+        except Exception as e:
+            logger.error("Failed to start Next.js", error=str(e))
+
+    # Initialize database
     try:
         await init_db()
         logger.info(
@@ -128,6 +187,19 @@ async def startup_event():
         )
         # Don't raise - allow health check to work, app can still serve static content
         # Database-dependent endpoints will fail gracefully
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Clean up Next.js subprocess on shutdown."""
+    global nextjs_process
+    if nextjs_process and nextjs_process.poll() is None:
+        logger.info("Stopping Next.js subprocess")
+        nextjs_process.terminate()
+        try:
+            nextjs_process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            nextjs_process.kill()
 
 
 # Initialize global trace store
@@ -349,14 +421,26 @@ class NegotiationRunner:
 
 def run_api_server():
     """Run the FastAPI server in a separate thread."""
-    config = uvicorn.Config(app, host="0.0.0.0", port=8000, log_level="warning")
+    port = int(os.environ.get("PORT", 8000))
+    config = uvicorn.Config(app, host="0.0.0.0", port=port, log_level="warning")
     server = uvicorn.Server(config)
     server.run()
 
 
 async def main():
     """Main entry point."""
-    # Start API server in background thread
+    from src.config.settings import settings
+
+    # In production, just run uvicorn directly (no interactive mode)
+    if settings.environment == "production":
+        port = int(os.environ.get("PORT", 8000))
+        logger.info("Starting production server", port=port)
+        config = uvicorn.Config(app, host="0.0.0.0", port=port, log_level="info")
+        server = uvicorn.Server(config)
+        await server.serve()
+        return
+
+    # Development: Start API server in background thread + interactive mode
     api_thread = threading.Thread(target=run_api_server, daemon=True)
     api_thread.start()
     logger.info("API server started", url="http://localhost:8000")
