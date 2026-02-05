@@ -232,7 +232,7 @@ export interface ShoppingListItem {
   product_name: string;
   model_number?: string;
   specs_summary?: string;
-  source: 'manual' | 'discovery';
+  source: 'manual' | 'discovery' | 'price_search';
   added_at: string;
 }
 
