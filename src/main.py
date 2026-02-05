@@ -218,7 +218,15 @@ NEXTJS_URL = "http://localhost:3000"
 async def proxy_to_nextjs(request: Request, path: str):
     """Proxy non-API requests to Next.js server."""
     # Don't proxy API routes (they're handled by routers above)
-    if path.startswith(("agent", "traces", "sellers", "analytics", "geo", "shopping", "logs", "criteria", "health", "debug")):
+    # These are the actual API prefixes, not frontend pages
+    api_prefixes = (
+        "agent/",       # /agent/*
+        "traces/",      # /traces/*
+        "api/",         # /api/sellers/*, /api/criteria/*, etc.
+        "health",       # /health
+        "debug/",       # /debug/*
+    )
+    if path.startswith(api_prefixes):
         # This shouldn't happen since routers are registered first, but just in case
         return Response(status_code=404)
 
