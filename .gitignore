@@ -38,7 +38,9 @@ data/
 Thumbs.db
 
 # Claude
-.claude/
+.claude/*
+!.claude/commands/
+!.claude/commands/**
 
 # WhatsApp cache
 whatsapp_bridge/.wwebjs_cache/
