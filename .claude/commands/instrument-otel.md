@@ -3,15 +3,183 @@
 You are an expert observability engineer. Your task is to add comprehensive OpenTelemetry (OTEL) instrumentation to this codebase. Follow each phase in order. Be thorough but non-destructive — never remove existing code, only add instrumentation alongside it.
 
 **Argument handling:** The user may pass an optional scope argument: `$ARGUMENTS`
+
+**Layer scoping:**
 - If empty or "all" → Run all phases (1–5)
 - If "backend" → Run phases 1 + 2 only
 - If "frontend" → Run phases 1 + 3 only
 - If "agents" → Run phases 1 + 4 only
 - If "collector" → Run phases 1 + 5 only
 
+**Path-targeted instrumentation:**
+- If the argument is a file path (e.g., `src/api/search.py`) or directory path (e.g., `src/scrapers/`) → Run **Targeted Mode** (Phase 0 + Phase T) instead of the full pipeline
+- A path is detected by checking if it contains `/` or `.` with a file extension
+- Multiple paths can be comma-separated: `src/api/search.py,src/agents/search_agent.py`
+
+---
+
+## Phase 0: Prerequisites Check (Targeted Mode Only)
+
+When running in targeted mode, check if the project already has OTEL set up before touching the target files.
+
+### Step 0.1: Check for existing telemetry module
+
+Search the project for an existing telemetry initialization file:
+- Look for files named `telemetry.py`, `telemetry.ts`, `tracing.py`, `tracing.ts`, `otel.py`, `otel.ts`
+- Search for imports of `opentelemetry` (Python) or `@opentelemetry` (Node.js)
+- Search for `TracerProvider`, `get_tracer`, `getTracer` in the codebase
+
+### Step 0.2: Determine telemetry status
+
+**If a telemetry module exists:**
+- Read it and understand the available helpers (`get_tracer`, `traced` decorator, `withSpan`, etc.)
+- Use these existing utilities when instrumenting the target files — do NOT create a new telemetry module
+- Report: "Found existing telemetry at `<path>`. Will use its utilities."
+
+**If NO telemetry module exists:**
+- Ask the user: "No OTEL initialization found. Should I create the telemetry module first, or just add manual span code to the target files?"
+- If user wants the module: Run Phase 1 (detection) + Step 2.1 (install packages) + Step 2.2 (create telemetry module), then proceed to Phase T
+- If user wants manual code: Proceed to Phase T using inline OTEL API calls
+
+### Step 0.3: Check for OTEL dependencies
+
+Verify that OTEL packages are in the project's dependency file:
+- Python: Check `requirements.txt` / `pyproject.toml` for `opentelemetry-api`
+- Node.js: Check `package.json` for `@opentelemetry/api`
+
+If missing, inform the user which packages need to be added and offer to add them.
+
+---
+
+## Phase T: Targeted Instrumentation
+
+Instrument only the specified file(s) or directory. This is surgical — read the target, understand it, add spans.
+
+### Step T.1: Read and analyze the target
+
+For each target path:
+
+1. **If it's a file**: Read the entire file. Identify:
+   - What the file does (API route, agent, scraper, utility, component, etc.)
+   - Key functions/methods that represent meaningful operations
+   - External calls (HTTP, DB, LLM, tool calls)
+   - Error handling patterns
+   - Whether it's sync or async
+
+2. **If it's a directory**: List all files in it, then for each file do the same analysis. Focus on the main module files, skip `__init__.py`, test files, and type stubs.
+
+### Step T.2: Plan the instrumentation
+
+Output a plan before making changes:
+
+```
+## Targeted Instrumentation Plan
+
+**Target**: <file or directory path>
+**Telemetry module**: <path to existing telemetry module, or "will create">
+
+### Spans to add:
+
+1. `<span.name>` — in `<function_name>` at line ~N
+   - Attributes: <list of attributes>
+   - Reason: <why this operation is worth tracing>
+
+2. `<span.name>` — in `<function_name>` at line ~N
+   - Attributes: <list>
+   - Reason: <why>
+
+...
+```
+
+Ask the user to confirm, modify, or skip specific spans before proceeding.
+
+### Step T.3: Add instrumentation
+
+For each confirmed span:
+
+1. **Add the import** at the top of the file (if not already present):
+   - Python: `from src.telemetry import get_tracer, traced` (or whatever the project's module provides)
+   - TypeScript: `import { getTracer, withSpan } from '@/lib/telemetry';`
+
+2. **Create a module-level tracer** (if not already present):
+   - Python: `tracer = get_tracer(__name__)`
+   - TypeScript: `const tracer = getTracer('module-name');`
+
+3. **Wrap the operation** in a span using the appropriate pattern:
+
+   **For Python functions** — prefer the `@traced` decorator for simple cases:
+   ```python
+   @traced("operation.name")
+   async def my_function(arg1, arg2):
+       ...
+   ```
+
+   **For Python blocks** — use context manager for partial function instrumentation:
+   ```python
+   async def my_function(arg1, arg2):
+       # ... setup code (not traced) ...
+       with tracer.start_as_current_span("operation.name") as span:
+           span.set_attribute("key", value)
+           result = await do_important_thing()
+           span.set_attribute("result.count", len(result))
+       # ... cleanup code (not traced) ...
+   ```
+
+   **For TypeScript** — use `startActiveSpan`:
+   ```typescript
+   async function myFunction(arg1: string) {
+       return tracer.startActiveSpan('operation.name', async (span) => {
+           span.setAttribute('key', value);
+           try {
+               const result = await doImportantThing();
+               span.setStatus({ code: SpanStatusCode.OK });
+               return result;
+           } catch (error) {
+               span.recordException(error as Error);
+               span.setStatus({ code: SpanStatusCode.ERROR });
+               throw error;
+           } finally {
+               span.end();
+           }
+       });
+   }
+   ```
+
+4. **Add error recording** on any existing try/catch blocks within the instrumented code.
+
+5. **Add relevant attributes** — be specific to the operation:
+   - Search: `search.query`, `search.result_count`
+   - API call: `http.url`, `http.method`, `http.status_code`
+   - DB: `db.operation`, `db.collection.name`
+   - Agent: `agent.name`, `gen_ai.request.model`
+   - Tool: `tool.name`, `tool.input`
+
+### Step T.4: Report changes
+
+Output a summary of what was added:
+
+```
+## Targeted Instrumentation Complete
+
+**Files modified**: <list>
+**Spans added**: <count>
+
+| Span Name | File | Function | Attributes |
+|---|---|---|---|
+| `product.search` | src/api/search.py | `search_products()` | query, result_count |
+| `scraper.fetch` | src/scrapers/zap.py | `fetch_page()` | url, status_code |
+
+**Prerequisites** (if not already done):
+- [ ] Install OTEL packages: `pip install opentelemetry-api opentelemetry-sdk`
+- [ ] Ensure telemetry is initialized at app startup
+- [ ] Start the OTEL collector: `docker-compose -f docker-compose.otel.yaml up -d`
+```
+
 ---
 
 ## Phase 1: Detection — Analyze the Tech Stack
+
+> **Note**: This phase runs for full-project instrumentation only. In targeted mode, Phase 0 handles the minimal detection needed.
 
 Scan the project to identify the tech stack. Read key files to determine what's in use. Report findings before proceeding.
 
